@@ -1,0 +1,718 @@
+experiment:
+  name: Baseline_Subsidy_Policy
+  seed: 42
+  steps: 50
+  replicates: 10
+scale:
+  name: medium_scale
+  n_farmers: 300
+  # @fix 2025-12-06: 恢复为30家企业
+  # 依据：
+  # 1. 原始设定为30家企业（见results/2025-07-30的记录）
+  # 2. 中国农业农村部数据：全国约300万个农民合作社，平均每村1-2个
+  # 3. 模拟一个行政村（300户），30家企业=10%的企业化率，符合现实
+  # 4. 80家企业过多，导致土地过度集中，偏离小农为主的中国国情
+  n_enterprises: 30
+  grid_width: 50
+  grid_height: 50
+results:
+  policy_dashboard_path: results/policy_dashboard.json
+policy:
+  active_scenario: baseline_cash
+  overrides: {}
+  government:
+    scenario_id: baseline_cash
+    # @fix 2025-12: 暂时禁用区域差异化，确保baseline_cash的350元/亩补贴生效
+    # 问题：区域策略把所有区域判定为"vulnerable"，使用high_support场景
+    # 但high_support的补贴率只有0.22，远低于baseline_cash的1.0
+    enable_regional_heterogeneity: false
+    regional_thresholds:
+      income_low: 22000
+      agri_ratio_high: 0.75
+      network_density_low: 0.25
+    regional_scenarios:
+      vulnerable: high_support
+      transforming: targeted_ai_shock
+  government_objectives:
+    weights:
+      grain_security: 0.4
+      farmer_welfare: 0.35
+      fiscal_balance: 0.25
+    targets:
+      grain_output: 250000000
+      avg_farmer_income: 20000
+      subsidy_budget: 100000000
+    adjustments:
+      subsidy_step: 0.01
+      price_floor_step: 0.05
+      rent_incentive_step: 0.01
+ai:
+  enabled: true
+  enterprise:
+    tfp_boost: 0.1
+    labor_substitution: 0.2
+    input_saving: 0.15
+  farmer:
+    non_farm_job_shock: 0.3
+    wage_penalty: 0.2
+    adoption_lag: 0.5
+  labor_market:
+    non_farm_demand_penalty: 0.25
+    wage_floor: 0.85  # 从0.5提高到0.85，防止工资过度下降（最低102元）
+
+# @new 2025-11-29: 劳动力市场配置
+# 理论：实现农村劳动力市场的完整机制
+# 参考：黄宗智《中国的隐性农业革命》、CLES农户调查数据
+labor_market:
+  # 基础工资参数（元/天）
+  base_agricultural_wage: 100.0      # 农业基础日工资
+  base_non_farm_wage: 150.0          # 非农基础日工资
+  wage_floor: 80.0                    # 最低工资
+  wage_ceiling: 300.0                 # 工资上限
+  
+  # 季节性因子（农忙期工资上涨）
+  seasonal_factors:
+    spring: 1.3      # 春耕期需求高
+    summer: 1.0      # 夏季正常
+    autumn: 1.5      # 秋收期需求最高
+    winter: 0.6      # 冬季需求低
+  
+  # 机械替代率（企业使用大型机械可替代多少人工）
+  machinery_substitution:
+    grain: 0.6       # 粮食作物机械化程度高
+    cash_crop: 0.3   # 经济作物机械化程度低
+  
+  # @new 2025-12: 机械化效率加成
+  # @theory 现实动态4: 规模户机械化比较优势在粮食
+  # 理论依据：大型机械（联合收割机、大型播种机等）对大田作物（粮食）的适配性远高于经作
+  # 实证支持：《中国农业机械化年鉴2022》显示粮食机械化率>95%，经作仅50-60%
+  # 《农业规模经营效率分析》表明规模化种粮有15-25%的效率优势
+  # 效果：粮食产量+20%，经作无加成，增强规模经营者种粮动力
+  mechanization_efficiency_bonus:
+    grain: 0.20      # 粮食作物机械化效率加成20%
+    cash_crop: 0.0   # 经济作物无机械化效率加成（劳动密集型）
+  
+  # 劳动力需求参数（天/亩）
+  labor_requirements:
+    grain:
+      base: 12                # 粮食基础需求（农户不使用机械）
+      with_machinery: 4       # 使用大型机械后（企业）
+    cash_crop:
+      base: 30                # 经济作物基础需求
+      with_machinery: 21      # 使用大型机械后
+  
+  # 机械成本（元/天，替代劳动力的机械折算成本）
+  machinery_cost_per_day: 80.0
+calibration:
+  data_source_dir: 校准用数据源
+  empirical_moment_config: config/calibration_config.yaml
+  parameter_controls:
+    production_alpha:
+      tunable: false
+    production_beta:
+      tunable: false
+    production_gamma:
+      tunable: false
+    climate_mean:
+      tunable: false
+    climate_std:
+      tunable: false
+    family_farm_expansion_probability:
+      tunable: false
+    agri_corp_expansion_probability:
+      tunable: false
+    cooperative_expansion_probability:
+      tunable: false
+    wage_elasticity:
+      tunable: false
+    rental_price_elasticity:
+      tunable: false
+    risk_aversion_weight:
+      tunable: false
+initial_conditions:
+  enabled: true
+  dataset: 校准用数据源/CLES_2020_2021_household_panel_mapping_label.xlsx
+  year: 2020
+  cache_file: config/initial_conditions_2020.yaml
+  keep_description_row: false
+agents:
+  farmer:
+    initial_capital_dist:
+      type: lognormal
+      mean: 9.2
+      std: 0.5
+    farming_ability_dist:
+      type: uniform
+      min: 0.8
+      max: 1.2
+    # @fix 2025-01: 修正年龄分布
+    # 问题：原N(50,10)导致53%农户≥60岁，与现实不符
+    # 参考：《中国农村统计年鉴》农业从业人员年龄结构
+    # 实际：35-55岁为主力，老龄化但非一半以上超60岁
+    age_dist:
+      type: normal
+      mean: 45.0   # 从50降到45
+      std: 12.0    # 从10扩大到12，增加年龄多样性
+    # @new 2025-01: 按生计策略差异化年龄分布
+    # Non_Farmer应该更年轻（进城务工的年轻人）
+    # Pure_Farmer可以更老（留守老人坚持务农）
+    age_by_livelihood_strategy:
+      Pure_Farmer:
+        mean: 52.0
+        std: 10.0
+      Pluriactive:
+        mean: 45.0
+        std: 10.0
+      Non_Farmer:
+        mean: 35.0   # 非农户应该是年轻人！
+        std: 8.0
+    land_transfer:
+      threshold_in: 0.5   # @fix 2025-11-29: 从0.6降到0.5，降低租入门槛
+      threshold_out: 0.15  # @fix 2025-11-29: 从0.2降到0.15，降低流出门槛
+      m_age: 45
+      n_age: 30
+      elderly_age_threshold: 60  # @fix 2025-11-29: 从65降到60，老年农户更积极流出
+      min_retained_area_per_capita: 0.2  # @fix 2025-11-29: 从0.3降到0.2，进一步降低保留面积
+      base_target_operated_area: 100  # @fix 2025-11-29: 从80增加到100，纯农户扩张目标更高
+      base_rent_price: 400  # @fix 2025-11-29: 从500降到400，降低保留价格基准
+      max_local_matches: 5  # @fix 2025-11-29: 从3增加到5，大幅增加熟人网络交易机会
+      non_farm_out_multiplier: 0.3  # @fix 2025-11-29: 从0.5降到0.3，Non_Farmer更积极流出
+      pluriactive_out_multiplier: 0.6  # @fix 2025-11-29: 从0.75降到0.6
+      pure_farmer_in_multiplier: 0.6  # @fix 2025-11-29: 从0.8降到0.6，Pure_Farmer更积极扩张
+      non_farm_in_multiplier: 1.5  # @fix 2025-11-29: 从1.2增加到1.5，非农户不太愿意租入
+    
+    # ========================================================================
+    # @new 2025-12-01: 土地撂荒参数配置
+    # 问题：模型中撂荒率过高导致总经营面积大幅下降，不符合粮食安全战略
+    # 修复：
+    # 1. 大幅降低基础撂荒率（从10%降到2%）
+    # 2. 添加补贴抑制因子：有补贴时撂荒概率降低
+    # 参考：Zhang & Xiong (2025) 补贴显著抑制耕地撂荒
+    # ========================================================================
+    land_abandonment:
+      base_rate: 0.02          # @fix: 从0.10降到0.02（年撂荒率2%）
+      max_rate: 0.10           # @fix: 从0.25降到0.10（最高撂荒率10%）
+      low_quality_threshold: 0.3  # 低质量阈值
+      fragmentation_threshold: 0.5  # 细碎化阈值
+      # 补贴对撂荒的抑制效果
+      subsidy_suppression_factor: 0.5  # 有补贴时撂荒概率降低50%
+    
+    # @new 2025-11-30: 生计策略演化增强参数
+    # 理论：增强三类农户的分化动力，反映中国农村结构转型
+    livelihood_evolution:
+      # 策略转换阈值 - @fix 2025-12-04: 提高纯农户阈值
+      pure_farmer_threshold: 0.80     # 农业收入占比>80%为纯农户（从0.65提高）
+      non_farmer_threshold: 0.30       # 农业收入占比<30%为非农户
+      cooldown_steps: 3                # @fix 2025-12-01: 冷却期从1提高到3（参考agriLOVE的switch_time）
+      
+      # @fix 2025-12-01: 城镇化结构趋势 - 大幅降低流出率
+      # 问题诊断：原设置(0.12/2.0/0.20)导致纯农户每步流失过快
+      # 每步12%+24%(年轻人)+20%(老年人)，20步后纯农户几乎清空
+      # 新设置：每步2%基础流出，更符合年化3%左右的真实转移率
+      # 参考：模拟中每个step≈1年，年转移率约2-5%是合理的
+      urbanization_trend:
+        base_outflow_prob: 0.02        # @fix: 从0.12降到0.02（2%/年）
+        young_multiplier: 1.5          # @fix: 从2.0降到1.5（年轻人3%）
+        elderly_exit_prob: 0.05        # @fix: 从0.20降到0.05（老年人5%）
+      
+      # 社会网络传染效应
+      neighbor_influence_weight: 0.20  # 邻居策略影响权重
+      strategy_contagion_prob: 0.08    # 策略传染概率（降低）
+    prospect_theory:
+      loss_aversion_lambda_dist:
+        type: normal
+        mean: 3.0
+        std: 0.5
+      value_function_curvature_dist:
+        type: normal
+        mean: 0.55
+        std: 0.1
+      probability_weighting_dist:
+        type: normal
+        mean: 0.7
+        std: 0.05
+    social:
+      network_radius: 5
+      average_degree: 8
+      transaction_avg_degree: 4
+      social_learning_weight_dist:
+        type: uniform
+        min: 0.2
+        max: 0.6
+    bayesian_learning:
+      prior_alpha: 5.0
+      prior_beta: 5.0
+      decay_rate: 0.9
+      belief_weight: 0.3
+    reference_point:
+      internal_orientation_dist:
+        type: uniform
+        min: 0.5
+        max: 0.9
+      safety_net_factor: 0.9
+    labor_allocation:
+      default_by_strategy:
+        PURE_FARMER:
+          agricultural: 0.5
+          off_farm: 0.5
+        PLURIACTIVE:
+          agricultural: 0.3
+          off_farm: 0.7
+        NON_FARMER:
+          agricultural: 0.05
+          off_farm: 0.95
+      elasticity:
+        wage_elasticity: 0.3
+        rental_price_elasticity: 0.2
+        risk_aversion_weight: 0.1
+      switching_cost: 0.05
+      adjustment_speed: 0.2
+      use_endogenous_allocation: true
+  # @refactor 2025-12: 重构企业类型系统
+  # - 移除FAMILY_FARM_LARGE（家庭农场归并到FarmerAgent）
+  # - 企业仅保留农业公司和合作社两种类型
+  enterprise:
+    type_distribution:
+      # 农业公司：工商资本下乡，占60%
+      AGRI_CORPORATION: 0.60
+      # 合作社：农户联合体，占40%
+      COOPERATIVE: 0.40
+    types:
+      AGRI_CORPORATION:
+        initial_capital_dist:
+          type: lognormal
+          mean: 14.5
+          std: 0.9
+        efficiency_factor_dist:
+          type: normal
+          mean: 1.65
+          std: 0.25
+        risk_aversion_dist:
+          type: normal
+          mean: 1.0
+          std: 0.3
+      COOPERATIVE:
+        initial_capital_dist:
+          type: lognormal
+          mean: 14.1
+          std: 0.65
+        efficiency_factor_dist:
+          type: normal
+          mean: 1.45
+          std: 0.22
+        risk_aversion_dist:
+          type: normal
+          mean: 1.5
+          std: 0.4
+    portfolio_optimization:
+      default_correlation: 0.3
+      min_weight: 0.0
+      max_weight: 1.0
+    expansion_decision:
+      base_participation_probability:
+        AGRI_CORPORATION: 0.80
+        COOPERATIVE: 0.70
+      factor_weights:
+        price_factor: 0.2
+        profit_factor: 0.15
+        efficiency_factor: 0.3
+        capital_factor: 0.35
+      expansion_target:
+        min_area: 200   # @fix 2025-11-29: 从120增加到200，大幅提高扩张目标
+        max_area_by_type:
+          AGRI_CORPORATION: 1500  # @fix 2025-11-29: 从1000增加到1500
+          COOPERATIVE: 800       # @fix 2025-11-29: 从600增加到800
+        expansion_ratio_range:
+        - 0.5   # @fix 2025-11-29: 从0.4提高到0.5
+        - 0.8   # @fix 2025-11-29: 从0.7提高到0.8
+  # @new 2025-12: 村集体配置
+  # @theory 现实动态5: 合作社/村集体强制种粮
+  # 理论依据：村集体统一流转的土地通常有粮食种植约束
+  # 实证支持：多地农村土地流转合同含"禁止非粮化"条款
+  # 地方政策：很多地区要求流转土地至少30-50%用于种粮
+  village_collective:
+    enabled: true
+    role_type: active                    # 主动型村集体
+    service_fee_rate: 0.03              # 流转服务费率3%
+    mediation_success_boost: 0.20       # 中介提高成交率20%
+    integration_threshold: 50           # 最低整合面积50亩
+    min_integrated_area: 10             # 最小整合单元10亩
+    participation_rate: 0.30            # 约30%流转通过村委会
+    # @critical 强制种粮比例
+    # 村集体统一流转的土地必须保证一定比例种植粮食
+    grain_requirement:
+      enabled: true
+      ratio: 0.40                       # 40%粮食种植最低要求
+      enforcement_strength: 0.8         # 执行力度（0-1）
+      applies_to:
+        - enterprises_on_village_land   # 对村集体流转土地上的企业生效
+        - cooperatives                  # 对合作社生效
+
+  # ========================================================================
+  # @new 2025-11-30: 粮食储备局配置
+  # @theory 托市收购 + 抛储稳价 + 财政可持续性约束
+  # 
+  # 现实参照（2023年数据）：
+  # - 全国托市收购约4000万吨稻谷，支出约500亿元
+  # - 政策性粮食库存约3亿吨
+  # - 最低收购价：中晚籼稻1.29元/斤，小麦1.18元/斤
+  # ========================================================================
+  grain_reserve_bureau:
+    enabled: true
+    # 年度收购预算（元）
+    # 模型代表一个农业县，约15000亩耕地，产粮约2000吨
+    # 假设最多收购20%产量 = 400吨 × 2.58元/kg = ~100万元
+    annual_budget: 1000000              # 100万元/年（模型尺度）
+    
+    # 托市价格（元/公斤）- 对应1.29元/斤
+    floor_price: 2.58
+    
+    # 抛储价格（元/公斤）- 高于托市价约15%
+    ceiling_price: 2.97
+    
+    # 初始库存（kg）
+    initial_storage: 100000             # 100吨初始库存
+    
+    # 最大库容（kg）
+    max_storage_capacity: 500000        # 500吨最大库容
+    
+    # 安全库存（kg）
+    min_safety_stock: 20000             # 20吨安全库存
+    
+    # 储存成本（元/吨/年）
+    storage_cost: 90
+    
+    # 财政悬崖参数
+    fiscal_cliff_threshold: 3           # 连续3年触发
+    fiscal_cliff_reduction_rate: 0.15   # 每年削减15%
+
+  # ========================================================================
+  # @new 2025-11-30: 财政系统配置
+  # @theory 补贴预算是外生的、有限的
+  # 
+  # 核心设计理念：
+  # 1. 补贴资金来自中央财政转移支付，非本地税收
+  # 2. 预算总额外生给定，模型内部只能在约束下分配
+  # 3. 连续超支会触发财政悬崖机制
+  # 
+  # 现实参照（2023年数据）：
+  # - 耕地地力保护补贴：1204.85亿元（约83元/亩）
+  # - 农机购置补贴：186亿元
+  # - 粮食最低收购价补贴：~500亿元
+  # - 合计约2300亿元，占中央财政约1%
+  # ========================================================================
+  fiscal_system:
+    # -------- 1. 补贴预算来源 --------
+    # 设定：模型代表一个农业县，耕地约15000亩
+    # 
+    # @fix 2024-12-01: 根据baseline_cash场景（350元/亩）重新计算
+    # 计算依据：
+    #   - 300农户 × 平均26.5亩 × 350元/亩 ≈ 278万元
+    #   - 80企业 × 平均500亩 × 350元/亩 × 1.15(系数) ≈ 1610万元
+    #   - 但企业实际种粮比例约40%，实际补贴需求约644万元
+    #   - 农户实际种粮比例约60%，实际补贴需求约167万元
+    #   - 合计约 167 + 644 ≈ 811万元
+    # 
+    # 官方参照（2023年数据）：
+    #   - 全国耕地地力保护补贴：1204.85亿元（约83元/亩）
+    #   - 全国：18亿亩耕地，各类补贴合计约2300亿元 → 约128元/亩
+    #   - 但baseline_cash场景设定为350元/亩强化补贴
+    #
+    # 新设定：800万元/年，略低于理论需求，保持适度财政压力
+    annual_subsidy_budget: 8000000      # 800万元/年（与补贴需求匹配）
+    
+    # 预算来源说明（用于文档）
+    budget_source: "central_fiscal_transfer"  # 中央财政转移支付
+    
+    # -------- 2. 预算约束机制 --------
+    budget_constraints:
+      # 硬性约束：补贴总额不能超过预算
+      hard_cap: true
+      
+      # 超支预警阈值
+      overspending_threshold: 1.2       # 超预算20%触发预警
+      
+      # 连续超支触发财政悬崖
+      consecutive_overspending_years: 3
+      
+      # 财政悬崖削减率
+      reduction_rate: 0.15              # 每年削减15%
+      
+      # 最低保障
+      minimum_budget_ratio: 0.5         # 最低保留50%
+    
+    # -------- 2.5 补贴拖欠机制 -------- @new 2025-12-04
+    # 核心理念：财政压力大时，政府不是立即削减补贴标准，而是产生拖欠
+    # 现实背景：中国农业补贴有时存在发放延迟，尤其在财政紧张地区
+    arrears_mechanism:
+      enable: true                      # 启用拖欠机制
+      max_arrears_ratio: 0.3            # 单年最大拖欠比例（30%）
+      clearance_rate: 0.5               # 年度拖欠清偿比例（清偿50%历史拖欠）
+      interest_rate: 0.0                # 拖欠利息（通常为0，政府补贴不计息）
+    
+    # -------- 3. 分项预算 --------
+    budget_allocation:
+      # 耕地地力保护补贴（按面积发放）
+      area_subsidy:
+        enabled: true
+        rate: 83.0                      # 元/亩，参照2023年全国均值
+        target: "all_farmers"           # 所有农户
+      
+      # 种粮大户补贴（规模经营补贴）
+      scale_subsidy:
+        enabled: true
+        threshold_area: 50              # 50亩以上才能获得
+        rate: 100.0                     # 元/亩（超过阈值部分）
+        target: "scale_operators"       # 规模经营者
+      
+      # 粮食生产补贴（按种粮面积）
+      grain_subsidy:
+        enabled: true
+        rate: 150.0                     # 元/亩
+        target: "grain_producers"       # 种粮生产者
+
+environment:
+  land:
+    patches_per_farmer_dist:
+      type: randint
+      min: 1
+      max: 3
+    # @refactor 2025-12: 扩大农户土地面积范围到3-50亩
+    # 理由：家庭农场归并到农户类型，需要支持更大规模经营
+    # 3-50亩覆盖从小农户到家庭农场的完整规模谱系
+    area_dist:
+      type: uniform
+      min: 3
+      max: 50
+    soil_quality_dist:
+      type: uniform
+      min: 0.5
+      max: 1.0
+  market:
+    labor_demand_elasticity: -0.4
+    # @fix 2025-11-29: 调整价格弹性为更合理的值
+    # 原值-0.5可能导致价格波动过大，调整为-0.4使变化更平滑
+    cash_crop_price_elasticity: -0.4
+    base_non_farm_wage: 120.0
+    # @fix 2025-11-29: 提高粮食价格弹性绝对值
+    # 原值-0.22过小导致价格对供需比过于敏感
+    grain_price_elasticity: -0.35
+    # @fix 2025-11-30: 大幅调整基础需求量，使供需比接近1.0-1.2
+    # 诊断发现：原需求量(粮400吨/经200吨)导致供需比高达60+倍
+    # 实际供给：粮食约2000吨，经作约13000吨
+    # 新设置：考虑模型代表一个地级市规模的农业区域
+    # @fix 2025-11-30 v3: 根据实际供给调整需求
+    # 观察数据：粮食供给1000-2000吨，经作13000吨
+    base_cash_crop_demand: 12000000  # 12000吨，接近实际经作供给量
+    base_grain_demand: 1500000  # 1500吨，略低于粮食供给量，使价格稳定在中间位置
+    non_farm_labor_base_demand: 150000
+    price_stickiness:
+      grain: 0.8
+      cash_crop: 0.8  # @fix: 统一价格粘性，避免经作价格过度波动
+      wage: 0.8
+    adjustment_rate:
+      labor: 0.05
+    use_endogenous_pricing: true
+    base_prices:
+      grain: 1.25
+      # @fix 2025-11-29: 提高经作基准价格到2.2元/斤，保持合理的利润比
+      # 中国农村现实：经济作物（蔬菜水果）价格通常是粮食的2-3倍
+      cash_crop: 2.2
+    # @new 2025-11-29: 添加价格限制配置，避免硬编码
+    price_limits:
+      grain:
+        min: 0.8
+        max: 3.0
+      cash_crop:
+        # @fix 2025-11-29: 提高经作价格下限，确保经作价格始终高于粮食
+        min: 1.5
+        max: 5.0
+    # @new 2025-11-29: 添加供需比范围限制配置
+    supply_demand_ratio_limits:
+      grain:
+        min: 0.2
+        max: 5.0
+      cash_crop:
+        min: 0.2
+        max: 5.0
+production:
+  base_yield:
+    grain: 750
+    cash_crop: 1000  # 从1500降到1000，使收益更平衡
+  
+  # ========================================================================
+  # @new 2025-12-01: 技术进步与规模化效率参数
+  # 问题：当前模型粮食产量下降不符合中国粮食安全战略
+  # 现实：中国粮食产量从2015年6.21亿吨增加到2022年6.87亿吨（+10.6%）
+  # 原因：技术进步（良种、化肥、机械化）和规模化经营提高了亩产
+  # ========================================================================
+  technology_progress:
+    # 年度技术进步率（亩产每年提升比例）
+    # 参考：2015-2022年中国粮食亩产年均增长约1.3%
+    annual_yield_growth_rate: 0.015  # 每年亩产提升1.5%
+    
+    # 规模化经营效率加成（大户比小户亩产高）
+    # 参考：《农业规模经营效率分析》显示规模户亩产提升10-20%
+    scale_efficiency_bonus:
+      threshold_area: 30   # 超过30亩算规模户
+      small_scale: 1.0     # 小规模基准
+      medium_scale: 1.10   # 30-100亩：+10%
+      large_scale: 1.20    # 100亩以上：+20%
+    
+    # 机械化效率加成（使用机械vs纯人工）
+    # 已在labor_market.mechanization_efficiency_bonus中定义
+    
+  yield_factors:
+    soil_quality:
+      exponent: 0.8
+      min_effect: 0.5
+      max_effect: 1.0
+    farming_ability:
+      min_multiplier: 0.8
+      max_multiplier: 1.2
+    technology:
+      max_improvement: 0.2
+      base_level: 1.0
+    climate:
+      volatility: 0.1
+      mean: 0.0
+  production_elasticities:
+    alpha: 0.49589044448468567
+    beta: 0.08296070022796173
+    gamma: 0.5020937824902479
+  random_noise:
+    std: 0.1
+  cost_structure:
+    input_prices:
+      seed:
+        grain: 5.0
+        cash_crop: 8.0
+      fertilizer: 2.5
+      pesticide: 15.0
+      machinery: 50.0
+    input_requirements:
+      seed:
+        grain: 30
+        cash_crop: 5
+      fertilizer:
+        grain: 100
+        cash_crop: 150
+      pesticide:
+        grain: 2
+        cash_crop: 5
+      labor_days:
+        grain: 10
+        cash_crop: 25
+      machinery_hours:
+        grain: 2
+        cash_crop: 3
+      other_cost_per_mu:
+        grain: 200
+        cash_crop: 300
+    use_detailed_cost: true
+  climate:
+    mean: 0.0
+    volatility: 0.15
+
+  # ========================================================================
+  # @new 2025-12: 农业社会化服务配置
+  # @theory 服务规模经济 - "隐性的农业革命"
+  # 
+  # 核心设计理念（陈义媛/高原研究）：
+  # 1. 土地没有流转，但服务在流转
+  # 2. 通过托管服务实现规模经济，无需土地产权变动
+  # 3. 服务商的规模效应与中小农户的地权保留可以兼得
+  # 
+  # 现实参照（2022年数据）：
+  # - 全国农业社会化服务组织超过104万个
+  # - 服务面积达到18.7亿亩次
+  # - 服务小农户超过8900万户
+  # 
+  # 理论贡献：
+  # - 解释为何中国农业效率提高但土地流转规模不大
+  # - 质疑"经营规模越大越好"的简单逻辑
+  # - 揭示中国农业现代化的独特路径
+  # ========================================================================
+  agricultural_service:
+    # 服务市场激活开关
+    enabled: true
+    
+    # 服务提供商数量
+    num_providers: 10
+    
+    # -------- 1. 服务类型与定价 --------
+    service_types:
+      # 全程托管：从种到收全托管
+      full_trusteeship:
+        base_fee_per_mu: 500         # 元/亩/年
+        min_fee: 400
+        max_fee: 600
+        coverage_ratio: 1.0           # 覆盖100%农事活动
+        labor_reduction: 0.85         # 减少85%劳动投入
+        yield_bonus: 0.10             # 产量提升10%（专业化）
+        min_scale_required: 50        # 至少托管50亩才有规模效益
+        
+      # 关键环节托管：播种、植保、收割
+      partial_trusteeship:
+        base_fee_per_mu: 280
+        min_fee: 200
+        max_fee: 350
+        coverage_ratio: 0.5
+        labor_reduction: 0.50
+        yield_bonus: 0.05
+        min_scale_required: 20
+        
+      # 单一环节服务：仅机收、仅植保等
+      single_service:
+        base_fee_per_mu: 100
+        min_fee: 50
+        max_fee: 150
+        coverage_ratio: 0.2
+        labor_reduction: 0.20
+        yield_bonus: 0.02
+        min_scale_required: 5
+    
+    # -------- 2. 服务商规模经济 --------
+    provider_economics:
+      # 规模经济系数：服务面积每增加100%，成本降低的比例
+      scale_economy_factor: 0.15      # 15%成本下降
+      
+      # 初始服务能力（亩）
+      initial_capacity:
+        min: 200
+        max: 1000
+        
+      # 服务半径（影响匹配效率）
+      service_radius: 15              # 格子单位
+      
+      # 设备投资门槛
+      equipment_investment: 50000     # 元
+      
+      # 每年能力扩张上限
+      max_annual_expansion: 0.3       # 30%
+    
+    # -------- 3. 小农户购买服务决策 --------
+    farmer_decision:
+      # 触发购买服务的条件
+      labor_scarcity_threshold: 0.5   # 劳动力不足50%时考虑
+      age_threshold: 55               # 高龄农户更倾向购买服务
+      
+      # 成本效益阈值：服务费/节约成本 < 此值才购买
+      cost_benefit_threshold: 1.2
+      
+      # 信任建立：首次购买后粘性
+      repeat_purchase_bonus: 0.2      # 重复购买折扣
+      
+    # -------- 4. 与土地流转的替代关系 --------
+    land_transfer_substitution:
+      # 服务可得性对土地流出意愿的抑制
+      substitution_effect: 0.3        # 有服务可用时，流出意愿降低30%
+      
+      # 解释：老农通过购买托管服务，可以继续持有土地获得收益
+      # 而无需将土地流转出去
+    
+    # -------- 5. 数据采集器 --------
+    data_collection:
+      track_service_area: true
+      track_provider_profits: true
+      track_farmer_participation: true

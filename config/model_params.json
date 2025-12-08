@@ -1,0 +1,142 @@
+{
+  "model_info": {
+    "name": "气候政策ABM模型参数配置",
+    "version": "1.0",
+    "description": "基于前景理论、Melitz企业异质性模型和创新扩散理论的农业政策ABM模型参数",
+    "theoretical_foundation": [
+      "前景理论 (Kahneman & Tversky, 1979)",
+      "Melitz企业异质性模型 (Melitz, 2003)", 
+      "创新扩散理论 (Rogers, 2003)",
+      "土地市场理论 (Deininger & Jin, 2005)"
+    ],
+    "data_sources": [
+      "国家统计局 (stats.gov.cn)",
+      "农业农村部 (moa.gov.cn)",
+      "中国农村观察 (zgncgc.ajcass.com)",
+      "农业技术扩散实证研究 (dlyj.ac.cn)"
+    ]
+  },
+  
+  "technology_level": {
+    "description": "企业技术水平分布参数",
+    "distribution": "lognormal",
+    "parameters": {
+      "mu": -0.2,
+      "sigma": 0.25,
+      "range": [0.6, 1.0]
+    },
+    "theoretical_basis": "Melitz企业异质性模型，企业生产率呈对数正态分布",
+    "empirical_support": "家庭农场平均效率0.7890，小农户0.6819 (DEA方法，yrdcpcn.org.cn)",
+    "dynamic_mechanism": "技术水平可随创新采纳、经验积累动态提升",
+    "source": "Melitz, M. J. (2003). The Impact of Trade on Intra-Industry Reallocations and Aggregate Industry Productivity. Econometrica."
+  },
+  
+  "land_quality": {
+    "description": "土地质量分布参数",
+    "distribution": "beta",
+    "parameters": {
+      "alpha": 2.0,
+      "beta": 2.0,
+      "range": [0, 1]
+    },
+    "theoretical_basis": "土地异质性影响土地市场配置效率",
+    "empirical_support": "中国土地流转比例2022年达36.73%，土地质量影响流转价格",
+    "mechanism": "高质量土地优先流向高技术主体，影响流转概率与价格",
+    "source": "Deininger, K., & Jin, S. (2005). The potential of land rental markets in the process of economic development: Evidence from China. Journal of Development Economics."
+  },
+  
+  "prospect_theory": {
+    "description": "前景理论行为参数",
+    "parameters": {
+      "loss_aversion_lambda": 3.0,
+      "value_function_curvature_sigma": 0.55,
+      "probability_weighting_alpha": 0.7
+    },
+    "theoretical_basis": "农户决策受损失厌恶、参考点依赖、非线性概率权重影响",
+    "empirical_support": "农业实证研究显示损失厌恶系数2.5-3.8，价值函数曲率0.48-0.63",
+    "reference_points": ["上年收入", "最低收购价", "同村均值", "政府补贴"],
+    "source": "Kahneman, D., & Tversky, A. (1979). Prospect Theory: An Analysis of Decision under Risk. Econometrica."
+  },
+  
+  "innovation_diffusion": {
+    "description": "创新扩散机制参数",
+    "adopter_categories": {
+      "innovators": 0.025,
+      "early_adopters": 0.135,
+      "early_majority": 0.34,
+      "late_majority": 0.34,
+      "laggards": 0.16
+    },
+    "s_curve_parameters": {
+      "initial_adoption_rate": 0.05,
+      "peak_adoption_rate": 0.15,
+      "saturation_level": 0.8
+    },
+    "theoretical_basis": "创新扩散呈S型曲线，采纳者分类符合正态分布",
+    "empirical_support": "中国农业技术转化率30-40%，采纳障碍主要为风险厌恶和社会网络弱",
+    "mechanism": "社会网络与意见领袖机制显式建模，示范点影响采纳概率",
+    "source": "Rogers, E. M. (2003). Diffusion of Innovations (5th ed.)."
+  },
+  
+  "grain_subsidy": {
+    "description": "种粮补贴政策参数",
+    "subsidy_scenarios": {
+      "no_subsidy": 0,
+      "normal_subsidy": 75,
+      "high_subsidy": 150
+    },
+    "unit": "元/亩/年",
+    "theoretical_basis": "补贴提升农户心理参考点，降低风险敏感性",
+    "empirical_support": "2023年耕地地力保护补贴标准每亩74.3-75.61元",
+    "mechanism": "直接影响农户收入与决策参考点，激励土地流转和技术采纳",
+    "sources": [
+      "hbqj.gov.cn - 潜江市人民政府耕地地力保护补贴标准",
+      "aihui.gov.cn - 爱辉区耕地地力保护补贴发放情况"
+    ]
+  },
+  
+  "land_transfer": {
+    "description": "土地流转机制参数",
+    "transfer_probability_factors": {
+      "land_quality_weight": 0.3,
+      "technology_level_weight": 0.4,
+      "subsidy_weight": 0.2,
+      "social_network_weight": 0.1
+    },
+    "price_mechanism": {
+      "base_price": 500,
+      "quality_multiplier": 1.5,
+      "technology_multiplier": 1.3
+    },
+    "theoretical_basis": "高质量土地优先流向高技术主体，模拟资源再配置效应",
+    "empirical_support": "2022年全国家庭承包耕地流转比例36.73%，土地流转面积5.76亿亩",
+    "mechanism": "流转决策综合考虑土地质量、主体技术水平、补贴、社会网络影响",
+    "source": "中国土地流转的区域差异及其影响因素——基于2003-2013年农村固定观察点数据 (progressingeography.com)"
+  },
+  
+  "simulation_parameters": {
+    "description": "仿真运行参数",
+    "time_steps": 100,
+    "num_agents": 1000,
+    "num_land_parcels": 2000,
+    "random_seed": 42,
+    "output_frequency": 10
+  },
+  
+  "model_simplifications": {
+    "description": "模型简化假设与理论边界",
+    "assumptions": [
+      "仅考虑种粮补贴，其他补贴类型暂不纳入",
+      "农户决策主要基于前景理论，忽略完全理性假设",
+      "土地质量在仿真期间相对稳定，不考虑退化",
+      "技术水平提升主要依赖创新采纳，忽略内生增长",
+      "社会网络结构相对稳定，不考虑网络演化"
+    ],
+    "theoretical_boundaries": [
+      "适用于中国农业政策情景分析",
+      "重点关注土地流转、技术采纳、生产率提升等核心机制",
+      "模型结果需结合具体政策背景解释",
+      "参数校准基于中国农业实证数据"
+    ]
+  }
+} 

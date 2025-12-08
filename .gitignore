@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Model Results and Outputs
+results/
+logs/
+*.log
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.tex
+*.json
+!config/*.json
+!config/*.yaml
+!config/*.py
+
+# Data files (if sensitive)
+data/cles/*.parquet
+校准用数据源/*.csv
+校准用数据源/*.xlsx
+校准用数据源/*.pdf
+校准用数据源/*.txt
+
+# Archive (legacy code)
+archive/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+runner.ipynb
+*.code-workspace
+

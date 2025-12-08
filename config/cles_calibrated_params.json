@@ -1,0 +1,30 @@
+{
+  "calibrated_params": {
+    "farming_ability_mean": 1.0,
+    "farming_ability_std": 0.15,
+    "risk_aversion_mean": 0.5,
+    "land_transfer_friction": 0.3,
+    "off_farm_wage_ratio": 1.2,
+    "subsidy_response_elasticity": 0.8
+  },
+  "calibration_metrics": {
+    "final_distance": 3.7575240125819075e-05,
+    "iterations": 1,
+    "converged": true
+  },
+  "calibration_targets": {
+    "livelihood_dist": {
+      "PURE_FARMER": 0.024154589371980676,
+      "PLURIACTIVE": 0.23671497584541062,
+      "NON_FARMER": 0.7391304347826086
+    },
+    "agri_income_ratio_mean": 0.17042034705340467,
+    "farming_ability_mean": 0.9981240487062405,
+    "sample_size": 2628
+  },
+  "metadata": {
+    "source": "CLES 2020",
+    "method": "SMM",
+    "timestamp": "2025-12-06T16:29:53.089858"
+  }
+}

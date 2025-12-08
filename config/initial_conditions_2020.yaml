@@ -1,0 +1,101 @@
+metadata:
+  source: CLES household panel
+  input_rows: 2628
+  year: 2020
+  area_quantiles:
+    p60: 3.0
+    p80: 9.0
+    p95: 21.0
+  spatial:
+    latitude:
+      mean: 0.149600304529882
+      std: 0.3567471089454801
+      min: 0.0
+      max: 1.0
+    longitude:
+      mean: 0.2975646879756469
+      std: 0.4572739993366926
+      min: 0.0
+      max: 1.0
+farmer:
+  n_households: 2628
+  strategy_distribution:
+    NON_FARMER: 0.9166666666666666
+    PLURIACTIVE: 0.04299847792998478
+    PURE_FARMER: 0.04033485540334855
+  avg_agri_income_ratio: 0.06128635057851652
+  farming_ability:
+    mean: 0.9981240487062407
+    std: 0.11427100851156194
+    min: 0.8
+    max: 1.2000000000000002
+  farmland_area:
+    mean: 5.004946727549467
+    std: 8.082109453686648
+    min: 0.0
+    max: 80.0
+  agri_income_ratio_summary:
+    mean: 0.06128635057851652
+    std: 0.1993231240266349
+    min: 0.0
+    max: 1.0
+  total_income:
+    mean: 138033.38045474316
+    std: 189845.68133491205
+    min: 0.0
+    max: 1633373.9899999795
+  initial_capital_dist:
+    log_mean: 11.111171341382356
+    log_std: 1.4064431394349808
+  age:
+    mean: 61.0441400304414
+    std: 11.32609828588831
+    min: 17.0
+    max: 90.0
+# @refactor 2025-12: 重构企业类型
+# - 移除FAMILY_FARM_LARGE（家庭农场归并到FarmerAgent）
+# - 企业仅保留农业公司和合作社两种类型
+# - FAMILY_FARM_LARGE的份额按比例分配到农业公司和合作社
+enterprise_categories:
+  AGRI_CORPORATION:
+    # 份额调整：原0.052 + 部分FAMILY_FARM_LARGE份额 → 0.30
+    share_of_households: 0.30
+    farmland_area:
+      mean: 31.094890510948904
+      std: 11.445448113756346
+      min: 21.0
+      max: 80.0
+    farming_ability:
+      mean: 1.0254987834549878
+      std: 0.10414810912412216
+      min: 0.8
+      max: 1.2000000000000002
+    total_income:
+      mean: 120122.83065693431
+      std: 139525.81770710117
+      min: 100.0
+      max: 1001200.0
+    initial_capital_dist:
+      log_mean: 10.951555213702733
+      log_std: 1.5495482416041708
+  COOPERATIVE:
+    # 份额调整：原0.331 + 部分FAMILY_FARM_LARGE份额 → 0.70
+    share_of_households: 0.70
+    farmland_area:
+      mean: 3.6176808266360507
+      std: 1.2099623416149001
+      min: 3.0
+      max: 8.0
+    farming_ability:
+      mean: 0.9992154611557595
+      std: 0.11625920916082687
+      min: 0.8
+      max: 1.2000000000000002
+    total_income:
+      mean: 119677.99980275307
+      std: 178675.1440095127
+      min: 0.0
+      max: 1633373.9899999795
+    initial_capital_dist:
+      log_mean: 10.941541217346714
+      log_std: 1.4153311489147506

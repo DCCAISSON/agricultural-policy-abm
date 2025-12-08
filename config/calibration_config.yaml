@@ -1,0 +1,41 @@
+# 实证数据列映射配置
+# 请根据真实数据列名进行调整。
+# 
+# 更新说明：
+# - 已根据CLES数据元数据更新为实际列名
+# - 列名对应关系见 docs/列映射配置说明.md
+
+data_source_dir: "校准用数据源"
+
+farmer_panel:
+  file: "CLES_2020_2021_household_panel_mapping_label.xlsx"
+  sheet: 0
+  # 使用 usecols 限制读取列可选
+  # usecols: "A:Z"
+  columns:
+    initial_capital: "e412"   # 创业初始投入资金（万元）- 农户可用于投资的资金，需为正值
+    farming_ability: "a206a1"   # 文化程度（在校几年）1 - 户主教育程度，作为耕作能力代理（0-1 或标准化的耕作能力指标）
+    risk_aversion: "i701"       # 风险偏好 - 风险厌恶指数（可选）
+    social_degree: "j204"   # 您的手机联系人数量 - 社交网络度数（可选）
+    farmland_area: "c107a"         # 耕地经营的总面积（亩）- 总经营面积
+    
+    # 生产函数相关列（用于估计α, β, γ）
+    # 注意：这些列在e1**系列中，脚本会自动提取
+    production_area: "e102a1"   # 种植面积（亩）- 用于生产函数估计（土地投入A）
+    production_yield: "e103a1"  # 总产量（斤）- 用于生产函数估计（产出Y）
+    production_labor_self: "e112a1"  # 自投工日（天/亩）- 劳动投入
+    production_labor_hired: "e113a1"  # 雇工费用（元/亩）- 劳动投入
+    production_capital_seed: "e107a1"  # 种子秧苗费（元/亩）- 资本投入
+    production_capital_fertilizer: "e108a1"  # 化肥费用（元/亩）- 资本投入
+    production_capital_pesticide: "e109a1"  # 农药费用（元/亩）- 资本投入
+    production_capital_irrigation: "e110a1"  # 水电及灌溉费用（元/亩）- 资本投入
+    production_capital_machinery: "e111a1"  # 机械作业费用（元/亩）- 资本投入
+    production_capital_depreciation: "e115a1"  # 固定资产折旧（元/亩）- 资本投入
+
+village_panel:
+  file: "CLES_2020_2021_village_panel_label_mapping.xlsx"
+  sheet: 0
+  columns:
+    mean_degree: "mean_degree"           # 村级平均社交度（需要根据实际数据文件验证）
+    elite_share: "elite_share"           # 村精英比例（需要根据实际数据文件验证）
+    clustering: "clustering_coeff"       # 聚类系数（可选，需要根据实际数据文件验证）
