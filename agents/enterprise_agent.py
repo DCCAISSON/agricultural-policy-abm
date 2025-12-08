@@ -92,6 +92,8 @@ class AgriculturalEnterpriseAgent(Agent):
         # 收入和成本相关（初始化）
         self.agricultural_revenue = 0
         self.subsidy_revenue = 0
+        self.scale_subsidy_revenue = 0  # @new 2025-12-08: 规模种粮补贴收入
+        self.scale_subsidy_qualified = False  # @new 2025-12-08: 是否达到规模补贴门槛
         self.total_revenue = 0
         self.production_cost = 0
         self.land_rental_cost = 0
@@ -1396,16 +1398,30 @@ class AgriculturalEnterpriseAgent(Agent):
     def calculate_subsidy_revenue(self, grain_yield=0):
         """
         @theory
-        计算补贴收入 - 根据实际粮食产量
+        计算补贴收入（普通种粮补贴 + 规模种粮补贴）
+        
+        @new 2025-12-08: 增加规模种粮补贴支持
+        企业作为规模经营主体，通常更容易达到规模补贴门槛
+        
+        政策依据：
+        1. 浙江省2023年度省级规模种粮动态补贴：50亩以上，20元/亩
+        2. 四川省荣县2025年种粮大户补贴：30亩以上，200元/亩
         """
         operated_area = self.get_operated_land_area()
         grain_weight = self.crop_portfolio.get(CropType.GRAIN, 0.5)
         grain_area = operated_area * grain_weight
         
+        # 初始化补贴相关属性
+        self.scale_subsidy_revenue = 0  # @new: 规模补贴收入
+        self.scale_subsidy_qualified = False  # @new: 是否达到规模补贴门槛
+        
         # 根据政府政策计算补贴
         if grain_area > 0:
-            # 按面积补贴
-            self.subsidy_revenue = self.model.environment.get_subsidy_for_enterprise(self, grain_area)
+            # 使用新的综合补贴计算接口
+            subsidy_info = self.model.environment.get_total_subsidy_for_enterprise(self, grain_area)
+            self.subsidy_revenue = subsidy_info['total']
+            self.scale_subsidy_revenue = subsidy_info['scale_subsidy']
+            self.scale_subsidy_qualified = subsidy_info['scale_qualified']
         else:
             self.subsidy_revenue = 0
 

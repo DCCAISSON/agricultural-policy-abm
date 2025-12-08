@@ -833,12 +833,149 @@ class Environment:
         return info['cash'] + info['in_kind_value']
 
     def get_subsidy_for_farmer(self, farmer, area):
-        """获取农户补贴"""
+        """获取农户补贴（普通种粮补贴）"""
         return self.calculate_subsidy_for_actor(area, actor_type='farmer')['cash']
 
     def get_subsidy_for_enterprise(self, enterprise, area):
-        """获取企业补贴"""
+        """获取企业补贴（普通种粮补贴）"""
         return self.calculate_subsidy_for_actor(area, actor_type='enterprise')['cash']
+    
+    def calculate_scale_subsidy(self, grain_area, actor_type='farmer'):
+        """
+        @new 2025-12-08: 计算规模种粮补贴
+        @theory 鼓励规模化、集约化粮食生产的专项补贴
+        
+        政策依据：
+        1. 浙江省2023年度省级规模种粮动态补贴：50亩以上，20元/亩
+        2. 四川省荣县2025年种粮大户补贴：30亩以上，200元/亩
+        3. 武平县规模种粮补助：30-100亩60元/亩，100亩以上100元/亩
+        
+        Args:
+            grain_area: 实际种粮面积（亩）
+            actor_type: 主体类型（farmer/enterprise/cooperative）
+        
+        Returns:
+            dict: {
+                'scale_subsidy': 规模补贴金额,
+                'qualified': 是否达到门槛,
+                'tier': 所属档次,
+                'breakdown': 补贴构成明细
+            }
+        """
+        # 从配置获取规模补贴参数
+        fiscal_config = self.config.get('fiscal_system', {})
+        budget_allocation = fiscal_config.get('budget_allocation', {})
+        scale_config = budget_allocation.get('scale_subsidy', {})
+        
+        # 检查是否启用规模补贴
+        if not scale_config.get('enabled', False):
+            return {'scale_subsidy': 0.0, 'qualified': False, 'tier': 0, 'breakdown': {}}
+        
+        # 获取门槛和基础补贴率
+        threshold_area = scale_config.get('threshold_area', 30)  # 默认30亩
+        base_rate = scale_config.get('base_rate', 200.0)  # 默认200元/亩
+        calculation_method = scale_config.get('calculation_method', 'full_area')
+        
+        # 检查是否达到门槛
+        if grain_area < threshold_area:
+            return {'scale_subsidy': 0.0, 'qualified': False, 'tier': 0, 'breakdown': {}}
+        
+        # 计算基础规模补贴
+        if calculation_method == 'full_area':
+            # 对全部种粮面积发放补贴
+            subsidy_area = grain_area
+        else:  # 'excess_area'
+            # 仅对超过门槛部分发放补贴
+            subsidy_area = grain_area - threshold_area
+        
+        base_subsidy = subsidy_area * base_rate
+        tier = 1
+        breakdown = {'base': base_subsidy}
+        
+        # 计算阶梯递增补贴
+        tiered_bonus_config = scale_config.get('tiered_bonus', {})
+        if tiered_bonus_config.get('enabled', False):
+            tiers = tiered_bonus_config.get('tiers', [])
+            bonus_total = 0
+            for tier_info in tiers:
+                tier_threshold = tier_info.get('threshold', 0)
+                bonus_rate = tier_info.get('bonus_rate', 0)
+                if grain_area >= tier_threshold:
+                    # 对超过该档门槛的面积给予额外补贴
+                    if calculation_method == 'full_area':
+                        bonus_area = grain_area
+                    else:
+                        bonus_area = grain_area - tier_threshold
+                    tier_bonus = bonus_area * bonus_rate
+                    bonus_total += tier_bonus
+                    tier += 1
+                    breakdown[f'tier_{tier_threshold}亩'] = tier_bonus
+            
+            base_subsidy += bonus_total
+        
+        # 主体类型调整系数（企业和合作社获得相同待遇）
+        subject_adjustment = 1.0
+        if actor_type in ['enterprise', 'cooperative']:
+            subject_adjustment = 1.0  # 规模补贴不额外区分主体类型
+        
+        final_subsidy = base_subsidy * subject_adjustment
+        
+        return {
+            'scale_subsidy': final_subsidy,
+            'qualified': True,
+            'tier': tier,
+            'breakdown': breakdown
+        }
+    
+    def get_total_subsidy_for_farmer(self, farmer, grain_area):
+        """
+        @new 2025-12-08: 获取农户的全部补贴（普通补贴+规模补贴）
+        
+        Args:
+            farmer: 农户智能体
+            grain_area: 种粮面积
+        
+        Returns:
+            dict: {
+                'basic_subsidy': 普通种粮补贴,
+                'scale_subsidy': 规模补贴,
+                'total': 补贴总额
+            }
+        """
+        basic_subsidy = self.get_subsidy_for_farmer(farmer, grain_area)
+        scale_info = self.calculate_scale_subsidy(grain_area, actor_type='farmer')
+        
+        return {
+            'basic_subsidy': basic_subsidy,
+            'scale_subsidy': scale_info['scale_subsidy'],
+            'scale_qualified': scale_info['qualified'],
+            'total': basic_subsidy + scale_info['scale_subsidy']
+        }
+    
+    def get_total_subsidy_for_enterprise(self, enterprise, grain_area):
+        """
+        @new 2025-12-08: 获取企业的全部补贴（普通补贴+规模补贴）
+        
+        Args:
+            enterprise: 企业智能体
+            grain_area: 种粮面积
+        
+        Returns:
+            dict: {
+                'basic_subsidy': 普通种粮补贴,
+                'scale_subsidy': 规模补贴,
+                'total': 补贴总额
+            }
+        """
+        basic_subsidy = self.get_subsidy_for_enterprise(enterprise, grain_area)
+        scale_info = self.calculate_scale_subsidy(grain_area, actor_type='enterprise')
+        
+        return {
+            'basic_subsidy': basic_subsidy,
+            'scale_subsidy': scale_info['scale_subsidy'],
+            'scale_qualified': scale_info['qualified'],
+            'total': basic_subsidy + scale_info['scale_subsidy']
+        }
 
     def calculate_subsidy_for_actor(self, area, actor_type='farmer', policy_override=None):
         policy = policy_override or self.active_policy or {}

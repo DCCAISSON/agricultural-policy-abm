@@ -150,6 +150,8 @@ class FarmerAgent(Agent):
         self.agricultural_income = 0      # 农业收入
         self.land_rental_income = 0      # 土地租金收入
         self.subsidy_income = 0          # 补贴收入
+        self.scale_subsidy_income = 0    # @new 2025-12-08: 规模种粮补贴收入
+        self.scale_subsidy_qualified = False  # @new 2025-12-08: 是否达到规模补贴门槛
         self.off_farm_income = 0         # 非农务工收入
         self.gross_income = 0            # 总收入（未减去支出）
         self.total_income = 0            # 总收入（向后兼容，等同于gross_income）
@@ -3987,7 +3989,15 @@ class FarmerAgent(Agent):
     def calculate_subsidy_income(self):
         """
         @theory
-        计算补贴收入
+        计算补贴收入（普通种粮补贴 + 规模种粮补贴）
+        
+        @new 2025-12-08: 增加规模种粮补贴支持
+        - 普通补贴：按种粮面积，所有种粮主体均可获得
+        - 规模补贴：种粮面积达到30亩以上的主体额外获得
+        
+        政策依据：
+        1. 浙江省2023年度省级规模种粮动态补贴：50亩以上，20元/亩
+        2. 四川省荣县2025年种粮大户补贴：30亩以上，200元/亩
         """
         if getattr(self.model.environment, "manual_subsidy_dispatch", False):
             # 政府代理已在外部发放补贴，这里仅保留现有数值
@@ -3995,11 +4005,18 @@ class FarmerAgent(Agent):
 
         # @fix: 重构为按面积补贴，在结算时计算
         self.subsidy_income = 0
+        self.scale_subsidy_income = 0  # @new: 规模补贴收入
+        self.scale_subsidy_qualified = False  # @new: 是否达到规模补贴门槛
+        
         if self.planned_crop == CropType.GRAIN:
             # 简化：假设所有经营面积都种了计划作物
             grain_area = self.get_operated_land_area() 
             if grain_area > 0:
-                self.subsidy_income = self.model.environment.get_subsidy_for_farmer(self, grain_area)
+                # 使用新的综合补贴计算接口
+                subsidy_info = self.model.environment.get_total_subsidy_for_farmer(self, grain_area)
+                self.subsidy_income = subsidy_info['total']
+                self.scale_subsidy_income = subsidy_info['scale_subsidy']
+                self.scale_subsidy_qualified = subsidy_info['scale_qualified']
 
     def calculate_off_farm_income(self):
         """

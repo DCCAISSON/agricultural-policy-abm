@@ -139,6 +139,19 @@ def run_single_simulation(config: dict, steps: int = 20, verbose: bool = True) -
         subsidy_total = farmer_subsidy + enterprise_subsidy
         history['subsidy_total'].append(subsidy_total)
         
+        # @new 2025-12-08: 规模补贴统计
+        # 统计达到规模补贴门槛的主体数量和补贴金额
+        scale_qualified_farmers = sum(1 for f in model.farmers if getattr(f, 'scale_subsidy_qualified', False))
+        scale_qualified_enterprises = sum(1 for e in enterprises if getattr(e, 'scale_subsidy_qualified', False))
+        farmer_scale_subsidy = sum(getattr(f, 'scale_subsidy_income', 0) for f in model.farmers)
+        enterprise_scale_subsidy = sum(getattr(e, 'scale_subsidy_revenue', 0) for e in enterprises)
+        
+        history.setdefault('scale_qualified_farmers', []).append(scale_qualified_farmers)
+        history.setdefault('scale_qualified_enterprises', []).append(scale_qualified_enterprises)
+        history.setdefault('farmer_scale_subsidy', []).append(farmer_scale_subsidy)
+        history.setdefault('enterprise_scale_subsidy', []).append(enterprise_scale_subsidy)
+        history.setdefault('total_scale_subsidy', []).append(farmer_scale_subsidy + enterprise_scale_subsidy)
+        
         # --- 农户结构指标 ---
         pure_count = 0
         pluri_count = 0
@@ -207,8 +220,14 @@ def run_single_simulation(config: dict, steps: int = 20, verbose: bool = True) -
         'avg_farmer_income': np.mean(history['farmer_income'][-5:]) if len(history['farmer_income']) >= 5 else np.mean(history['farmer_income']),
         'final_pure_farmer_income': history['pure_farmer_income'][-1],
         'final_pluriactive_income': history['pluriactive_income'][-1],
-        # 补贴
+        # 补贴（普通+规模）
         'total_subsidy_cost': sum(history['subsidy_total']),
+        # @new 2025-12-08: 规模补贴统计
+        'final_scale_qualified_farmers': history.get('scale_qualified_farmers', [0])[-1],
+        'final_scale_qualified_enterprises': history.get('scale_qualified_enterprises', [0])[-1],
+        'total_scale_subsidy': sum(history.get('total_scale_subsidy', [0])),
+        'final_farmer_scale_subsidy': history.get('farmer_scale_subsidy', [0])[-1],
+        'final_enterprise_scale_subsidy': history.get('enterprise_scale_subsidy', [0])[-1],
         # 农户结构
         'final_pure_farmer_count': history['pure_farmer_count'][-1],
         'final_pluriactive_count': history['pluriactive_count'][-1],
