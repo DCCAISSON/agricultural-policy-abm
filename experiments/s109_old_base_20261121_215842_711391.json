@@ -1,0 +1,1973 @@
+{
+  "experiment": {
+    "name": "Baseline_Subsidy_Policy",
+    "seed": 109,
+    "steps": 30,
+    "replicates": 1,
+    "replicates_quick": 3,
+    "replicates_default": 30,
+    "replicates_publication": 30,
+    "smoke_years": {
+      "start": 2010,
+      "count": 3
+    }
+  },
+  "forecasting": {
+    "sown_area_conversion": {
+      "enabled": false,
+      "forecast_usable": false,
+      "mode": "disabled_identity",
+      "baseline_multiplier": 1.0,
+      "annual_growth_rate": 0.0,
+      "min_multiplier": 1.0,
+      "max_multiplier": 2.5,
+      "source": "disabled; explicit evidence required before enabling",
+      "parameter_source": "not_applicable_disabled",
+      "parameter_status": "not_applicable_disabled",
+      "parameter_claim_boundary": "No production sown-area conversion is active. Validation bridges are audit-only and must not be described as endogenous ABM cropping-intensity mechanisms.",
+      "claim_boundary": "ABM reports physical operated grain area by default; mature sown-area forecast claims require an independently validated production conversion or endogenous cropping-intensity mechanism.",
+      "mechanism_candidate": {
+        "enabled": true,
+        "mode": "endogenous_cropping_intensity",
+        "forecast_usable": false,
+        "baseline_multiplier": 1.0,
+        "annual_growth_rate": 0.0,
+        "min_multiplier": 1.0,
+        "max_multiplier": 2.5,
+        "require_all_signals": true,
+        "service_coverage_signal_path": "service_coverage_rate",
+        "mechanization_signal_path": "mechanization_rate",
+        "concentration_signal_path": "land_concentration_top10",
+        "unproductive_area_signal_path": "unproductive_area_rate",
+        "service_elasticity": 0.5,
+        "mechanization_elasticity": 0.2,
+        "concentration_elasticity": 0.4,
+        "unproductive_area_penalty": 0.0,
+        "source": "config.forecasting.sown_area_conversion.mechanism_candidate",
+        "status": "endogenous_cropping_intensity_candidate_unvalidated",
+        "parameter_source": "configured audit candidate from ABM service, mechanization, land-concentration, and unproductive-area signals; not independently estimated",
+        "parameter_status": "configured_assumption_unvalidated",
+        "parameter_evidence_reference": "missing; requires official sown-area/cropping-intensity panel before forecast use",
+        "parameter_claim_boundary": "Audit-only production candidate. It can diagnose the G1 pathway, but cannot support mature national grain sown-area or yield forecast claims until it passes independent official backtests and benchmark gates.",
+        "claim_boundary": "Production-side sown-area mechanism candidate only; official grain_sown_area remains physical-area proxy unless forecast_usable passes provenance and benchmark guards."
+      }
+    }
+  },
+  "mechanism_switches": {
+    "rent_market_enabled": true,
+    "acquaintance_network_enabled": false,
+    "crop_choice_enabled": true,
+    "use_learning_farmer": false,
+    "use_learning_enterprise": false,
+    "use_reputation_village": false,
+    "reputation_decay_rate": 0.95,
+    "reputation_prior_alpha": 1.0,
+    "reputation_prior_beta": 1.0,
+    "use_extended_government_rl": false
+  },
+  "crop": {
+    "forced_grain": false,
+    "cash_crop_profitability_guard_enabled": true,
+    "cash_crop_profit_guard_margin_yuan_per_mu": 10.0,
+    "non_farmer_retained_land_grain_fallback_enabled": true,
+    "non_farmer_retained_land_max_area_mu": 12.0,
+    "non_farmer_retained_land_threshold_tolerance_mu": 0.25,
+    "non_farmer_retained_land_service_min_signal": 0.65
+  },
+  "population_dynamics": {
+    "enabled": true,
+    "region": "national",
+    "macro_anchor": {
+      "data_source": "restricted_inputs/nbs_rural_population.json",
+      "base_year": 2010,
+      "metric": "hybrid",
+      "household_weight": 0.55,
+      "population_weight": 0.45,
+      "monotonic_smoothing": true,
+      "average_annual_decline_rate": -0.0265,
+      "active_farmer_mapping": "softened",
+      "active_farmer_floor_ratio": 0.65,
+      "active_farmer_decline_elasticity": 2.0,
+      "census_shock_smoothing": {
+        "enabled": true,
+        "start_year": 2021,
+        "end_year": 2022,
+        "release_year": 2028,
+        "floor_year": 2020,
+        "floor_multiplier": 1.0
+      }
+    },
+    "exit_mechanism": {
+      "death_ratio": 0.15,
+      "urbanization_ratio": 0.85,
+      "urbanization_score_weights": {
+        "age": 0.25,
+        "education": 0.2,
+        "income_gap": 0.35,
+        "social_link": 0.2
+      },
+      "urbanization_model": {
+        "urban_avg_income": 65000,
+        "intercept": -3.0,
+        "coef_income_gap": 1.45,
+        "coef_non_farm_ratio": 1.65,
+        "coef_age": -0.55,
+        "coef_education": 0.65,
+        "coef_family_urban": 0.95,
+        "coef_scale_lock": 0.45,
+        "professional_scale_anchor": 55,
+        "min_probability": 0.01,
+        "max_probability": 0.85
+      }
+    },
+    "entry_mechanism": {
+      "trigger": "land_bank_threshold",
+      "min_scale_farming_size": 12,
+      "max_scale_farming_size": 24,
+      "new_entry_probability": 0.03,
+      "max_replacement_share": 0.55,
+      "baseline_replacement_churn_rate": 0.005,
+      "entry_exit_linkage_share": 0.35,
+      "entrant_feature_library": "restricted_inputs/cfps_entrants_money2024.json",
+      "feature_library": "restricted_inputs/cfps_feature_library.json",
+      "type_distribution": {
+        "return_migrant": 0.4,
+        "family_farm": 0.4,
+        "cooperative": 0.2
+      }
+    },
+    "paper_model_exit_mode": "livelihood_exit_only",
+    "land_matching_capacity_scale": 1.0
+  },
+  "scale": {
+    "name": "national_representative",
+    "n_farmers": 600,
+    "enterprise_ratio": 0.1,
+    "n_enterprises": 60,
+    "grid_width": 50,
+    "grid_height": 50,
+    "full_scale": {
+      "n_farmers": 2000,
+      "enterprise_ratio": 0.1,
+      "n_enterprises": 200,
+      "grid_width": 150,
+      "grid_height": 150
+    },
+    "national_households": 250000000,
+    "description": "代表性样本模拟，结果需乘以放大因子",
+    "apply_scaling_to": [
+      "total_subsidy_amount",
+      "total_grain_production",
+      "total_fiscal_expenditure",
+      "enterprise_aggregate_profit",
+      "total_land_area",
+      "aggregate_output"
+    ],
+    "regional_distribution": {
+      "东部": 0.35,
+      "中部": 0.28,
+      "西部": 0.27,
+      "东北": 0.1
+    },
+    "agent_representation_weight": 1.0,
+    "width": 50,
+    "height": 50
+  },
+  "results": {
+    "policy_dashboard_path": "results/policy_dashboard.json"
+  },
+  "policy": {
+    "active_scenario": "baseline_cash",
+    "overrides": {
+      "grain_subsidies_rate": 0.0,
+      "base_subsidy_per_mu": 350.0,
+      "grain_price_floor": 1.2,
+      "disable_grain_intervention": false,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    },
+    "rl_enabled": false,
+    "rl_reward_weights": {
+      "grain_security": 0.5,
+      "farmer_welfare": 0.3,
+      "fiscal_balance": 0.2
+    },
+    "government": {
+      "adaptive_adjustment_enabled": false,
+      "policy_mode": "rule",
+      "scenario_id": "baseline_cash"
+    },
+    "government_objectives": {
+      "weights": {
+        "grain_security": 0.4,
+        "farmer_welfare": 0.35,
+        "fiscal_balance": 0.25
+      },
+      "targets": {
+        "grain_output": 5750000,
+        "grain_security_buffer": 1.15,
+        "max_target_demand_ratio": 2.6,
+        "rolling_supply_weight": 0.35,
+        "avg_farmer_net_income": 20000,
+        "avg_farmer_income": 20000,
+        "subsidy_budget": 100000000
+      },
+      "adjustments": {
+        "subsidy_step": 0.01,
+        "price_floor_step": 0.05,
+        "rent_incentive_step": 0.01
+      }
+    },
+    "policy_mode": "rule",
+    "government_q_project": {
+      "enabled": true,
+      "episode_end_step": 3,
+      "grain_reference_kg": 1379348.1549567,
+      "h0_income_reference_yuan": 40746.80987954448,
+      "uncapped_income_reward": true,
+      "budget_area_menu": 4146.5
+    }
+  },
+  "ai": {
+    "enabled": false,
+    "information_governance": {
+      "enabled": false,
+      "damage_detection_accuracy": 0.8,
+      "misallocation_detection_rate": 0.6,
+      "duplicate_subsidy_detection_rate": 0.5,
+      "leakage_reduction_per_detection": 0.35
+    },
+    "service_coordination": {
+      "enabled": false,
+      "service_dispatch_efficiency": 0.15,
+      "service_matching_boost": 0.15,
+      "service_radius_boost": 0.2,
+      "service_cost_reduction": 0.12
+    },
+    "productivity_shock": {
+      "enabled": false,
+      "tfp_boost": 0.1,
+      "labor_substitution": 0.2,
+      "input_saving": 0.15,
+      "non_farm_job_shock": 0.3,
+      "wage_penalty": 0.2,
+      "adoption_lag": 0.5,
+      "non_farm_demand_penalty": 0.25,
+      "wage_floor": 0.85
+    },
+    "enterprise": {
+      "tfp_boost": 0.1,
+      "labor_substitution": 0.2,
+      "input_saving": 0.15
+    },
+    "farmer": {
+      "non_farm_job_shock": 0.3,
+      "wage_penalty": 0.2,
+      "adoption_lag": 0.5
+    },
+    "labor_market": {
+      "non_farm_demand_penalty": 0.25,
+      "wage_floor": 0.85
+    }
+  },
+  "labor_market": {
+    "base_agricultural_wage": 120.0,
+    "base_non_farm_wage": 190.0,
+    "wage_floor": 80.0,
+    "wage_ceiling": 300.0,
+    "seasonal_factors": {
+      "non_farm_monthly": {
+        "january": 0.95,
+        "february": 0.91,
+        "march": 1.0,
+        "april": 1.0,
+        "may": 1.02,
+        "june": 1.0,
+        "july": 1.0,
+        "august": 1.0,
+        "september": 1.0,
+        "october": 1.02,
+        "november": 1.0,
+        "december": 0.98
+      },
+      "agricultural": {
+        "spring": 1.3,
+        "summer": 1.0,
+        "autumn": 1.5,
+        "winter": 0.6
+      }
+    },
+    "machinery_substitution": {
+      "grain": 0.6,
+      "cash_crop": 0.3
+    },
+    "mechanization_efficiency_bonus": {
+      "grain": 0.2,
+      "cash_crop": 0.0
+    },
+    "labor_requirements": {
+      "grain": {
+        "base": 12,
+        "with_machinery": 4
+      },
+      "cash_crop": {
+        "base": 30,
+        "with_machinery": 21
+      }
+    },
+    "machinery_cost_per_day": 80.0
+  },
+  "calibration": {
+    "data_source_dir": "校准用数据源",
+    "empirical_moment_config": "restricted_inputs/calibration_config.yaml",
+    "calibrated_params_path": "restricted_inputs/calibrated_params_enhanced.json",
+    "parameter_controls": {
+      "production_alpha": {
+        "tunable": false
+      },
+      "production_beta": {
+        "tunable": false
+      },
+      "production_gamma": {
+        "tunable": false
+      },
+      "climate_mean": {
+        "tunable": false
+      },
+      "climate_std": {
+        "tunable": false
+      },
+      "family_farm_expansion_probability": {
+        "tunable": false
+      },
+      "agri_corp_expansion_probability": {
+        "tunable": false
+      },
+      "cooperative_expansion_probability": {
+        "tunable": false
+      },
+      "wage_elasticity": {
+        "tunable": false
+      },
+      "rental_price_elasticity": {
+        "tunable": false
+      },
+      "risk_aversion_weight": {
+        "tunable": false
+      }
+    },
+    "apply_calibrated_params": false
+  },
+  "initial_conditions": {
+    "microdata_driven": true,
+    "initial_feature_library": "restricted_inputs/agent_feature_library.json",
+    "feature_library": "restricted_inputs/agent_feature_library.json",
+    "data_source": "nfps",
+    "calibration_file": "restricted_inputs/calibration_results_2009_2015.json",
+    "enabled": false,
+    "dataset": "校准用数据源/CLES_2020_2021_household_panel_mapping_label.xlsx",
+    "year": 2020,
+    "cache_file": "restricted_inputs/initial_conditions_2020.yaml",
+    "keep_description_row": false,
+    "fixed_cohort_path": "restricted_inputs/cohort600_seed17_baseline_money2024.json"
+  },
+  "agents": {
+    "farmer": {
+      "initial_capital_dist": {
+        "type": "lognormal",
+        "mean": 10.5096,
+        "std": 0.5815
+      },
+      "farming_ability_dist": {
+        "type": "uniform",
+        "min": 0.8,
+        "max": 1.2
+      },
+      "age_dist": {
+        "type": "normal",
+        "mean": 45.0,
+        "std": 12.0
+      },
+      "livelihood_strategy_distribution": {
+        "Pure_Farmer": 0.297,
+        "Pluriactive": 0.251,
+        "Non_Farmer": 0.452
+      },
+      "age_by_livelihood_strategy": {
+        "Pure_Farmer": {
+          "mean": 58.0,
+          "std": 8.0
+        },
+        "Pluriactive": {
+          "mean": 52.0,
+          "std": 10.0
+        },
+        "Non_Farmer": {
+          "mean": 48.0,
+          "std": 12.0
+        }
+      },
+      "land_transfer": {
+        "threshold_in": 0.5,
+        "threshold_out": 0.4,
+        "m_age": 50,
+        "n_age": 35,
+        "elderly_age_threshold": 65,
+        "min_retained_area_per_capita": 0.25,
+        "non_farmer_min_retained_area_per_capita": 0.28,
+        "urbanized_non_farmer_min_retained_area_per_capita": 0.1,
+        "base_target_operated_area": 50,
+        "base_rent_price": 288.09138703800744,
+        "max_local_matches": 1,
+        "non_farm_out_multiplier": 0.5,
+        "pluriactive_out_multiplier": 0.55,
+        "pure_farmer_in_multiplier": 0.58,
+        "non_farm_in_multiplier": 2.0,
+        "profit_threshold_base": 0.32,
+        "rural_nonfarmer_profit_threshold": 0.24,
+        "rent_in_capital_share": 0.36,
+        "rent_in_min_bid_per_mu": 90,
+        "max_annual_transfer_rate": 0.1792909270370002,
+        "priced_auction_reserve_share": 0.15,
+        "priced_auction_overflow_acceptance": 0.7,
+        "cumulative_transfer_ceiling": 0.5,
+        "endogenous_soft_floor": 0.35,
+        "service_capacity_bonus": 0.2,
+        "profitability_capacity_bonus": 0.2,
+        "professionalization_capacity_bonus": 0.22,
+        "village_facilitation_bonus": 0.08,
+        "aging_capacity_bonus": 0.01,
+        "policy_support_capacity_bonus": 0.03,
+        "policy_reference_intensity": 0.2,
+        "capacity_signal_curvature": 1.2,
+        "ceiling_unlock_share": 0.24,
+        "unlock_signal_curvature": 1.15,
+        "policy_unlock_bonus": 0.05,
+        "service_unlock_bonus": 0.1,
+        "village_unlock_bonus": 0.06,
+        "professional_unlock_bonus": 0.07,
+        "profit_reference_income": 65000,
+        "operator_share_reference": 0.09,
+        "service_reference_share": 0.55,
+        "aging_reference_share": 0.55,
+        "soft_throttle_min_acceptance": 0.14,
+        "collective_overflow_base_acceptance": 0.48,
+        "cross_village_overflow_acceptance": 0.95,
+        "land_area_lognormal_mu": 1.5678,
+        "land_area_lognormal_sigma": 1.0291
+      },
+      "land_abandonment": {
+        "base_rate": 0.02,
+        "max_rate": 0.1,
+        "low_quality_threshold": 0.3,
+        "fragmentation_threshold": 0.5,
+        "subsidy_suppression_factor": 0.5
+      },
+      "age_exit": {
+        "enabled": true,
+        "age_55_exit_rate": 0.08,
+        "age_65_exit_rate": 0.18,
+        "age_75_exit_rate": 0.6
+      },
+      "livelihood_evolution": {
+        "pure_farmer_threshold": 0.6,
+        "non_farmer_threshold": 0.4,
+        "cooldown_steps": 1,
+        "urbanization_trend": {
+          "base_outflow_prob": 0.035,
+          "young_multiplier": 1.02,
+          "elderly_exit_prob": 0.015
+        },
+        "neighbor_influence_weight": 0.14,
+        "strategy_contagion_prob": 0.02,
+        "transition_probabilities": {
+          "stable_offfarm_to_nonfarmer_prob": 0.6,
+          "stable_offfarm_income_threshold": 8000,
+          "stable_offfarm_agri_ratio_cap": 0.8,
+          "pluriactive_structural_nonfarmer_prob": 0.12,
+          "nonfarmer_saturation_start": 0.86,
+          "nonfarmer_saturation_cap": 0.94,
+          "nonfarmer_saturation_min_factor": 0.2,
+          "pure_nonfarmer_pressure_start": 0.8,
+          "pure_nonfarmer_pressure_multiplier": 2.0,
+          "pure_nonfarmer_pressure_cap": 1.4,
+          "pure_farmer_diversification_prob": 0.14,
+          "pure_farmer_direct_nonfarmer_prob": 0.05,
+          "pure_farmer_direct_nonfarmer_income_threshold": 14000,
+          "smallholder_pressure_area_threshold": 7,
+          "cfps_annual_pure_stay_rate": 0.887,
+          "cfps_annual_pluri_stay_rate": 0.15,
+          "cfps_annual_nonfarmer_stay_rate": 0.199,
+          "transition_provenance": "cfps_panel_estimated",
+          "smallholder_pure_to_pluriactive_prob": 0.08,
+          "smallholder_direct_nonfarmer_prob": 0.03,
+          "smallholder_direct_nonfarmer_income_threshold": 14000,
+          "strict_scale_reentry_prob": 0.02,
+          "nonfarmer_to_pluriactive_prob": 0.0066
+        },
+        "transition_timing_adjustments": {
+          "enabled": true,
+          "periods": [
+            {
+              "name": "early_nonfarm_acceleration",
+              "start_year": 2015,
+              "end_year": 2018,
+              "pure_outflow_multiplier": 1.1,
+              "pure_farmer_diversification_multiplier": 1.1,
+              "pure_farmer_direct_nonfarmer_multiplier": 1.08,
+              "smallholder_pure_to_pluriactive_multiplier": 1.1,
+              "smallholder_direct_nonfarmer_multiplier": 1.08,
+              "stable_offfarm_to_nonfarmer_multiplier": 1.02,
+              "pluriactive_structural_nonfarmer_multiplier": 1.03
+            },
+            {
+              "name": "late_early_nonfarm_acceleration",
+              "start_year": 2017,
+              "end_year": 2018,
+              "stable_offfarm_to_nonfarmer_multiplier": 1.06,
+              "pluriactive_structural_nonfarmer_multiplier": 1.08,
+              "dominant_nonfarm_multiplier": 1.06,
+              "pluriactive_neighbor_pressure_multiplier": 1.04
+            },
+            {
+              "name": "post2020_pluriactive_retention",
+              "start_year": 2021,
+              "end_year": 2040,
+              "pure_outflow_multiplier": 0.2,
+              "pure_farmer_diversification_multiplier": 0.25,
+              "pure_farmer_direct_nonfarmer_multiplier": 0.15,
+              "smallholder_pure_to_pluriactive_multiplier": 0.5,
+              "smallholder_direct_nonfarmer_multiplier": 0.35,
+              "stable_offfarm_to_nonfarmer_multiplier": 0.4,
+              "pluriactive_structural_nonfarmer_multiplier": 0.35,
+              "pluriactive_elderly_exit_multiplier": 0.4,
+              "dominant_nonfarm_multiplier": 0.25,
+              "pluriactive_neighbor_pressure_multiplier": 0.35
+            }
+          ]
+        },
+        "livelihood_persistence": {
+          "pure_farmer_outflow_multiplier": 1.0,
+          "new_entrant_transition_multiplier": 0.85,
+          "new_entrant_retention_years": 4,
+          "freeze_initial_cohort_baseline_year": true,
+          "initial_cohort_baseline_observation_max_step": 1,
+          "initial_cohort_transition_multiplier": 0.15,
+          "initial_cohort_retention_years": 5
+        },
+        "farmer_entry": {
+          "enabled": true,
+          "annual_entry_rate": 0.02,
+          "baseline_replacement_churn_rate": 0.005,
+          "entry_age_range": [
+            24,
+            38
+          ],
+          "entry_strategy_distribution": {
+            "Pure_Farmer": 0.15,
+            "Pluriactive": 0.75,
+            "Non_Farmer": 0.1
+          },
+          "min_farmer_count": 760,
+          "min_farmer_ratio": 0.76,
+          "successor_absorption": {
+            "professional_priority_share": 0.44,
+            "service_priority_share": 0.24,
+            "general_priority_share": 0.08,
+            "enterprise_buffer_share": 0.24,
+            "cooperative_buffer_share": 0.12,
+            "corporation_buffer_share": 0.12,
+            "professional_max_per_agent": 70,
+            "service_max_per_agent": 48,
+            "general_max_per_agent": 18,
+            "enterprise_max_per_agent": 180,
+            "cooperative_max_per_agent": 180,
+            "corporation_max_per_agent": 220,
+            "professional_floor_agents": 4,
+            "service_floor_agents": 4,
+            "general_floor_agents": 3,
+            "enterprise_floor_agents": 2,
+            "cooperative_floor_agents": 2,
+            "corporation_floor_agents": 1,
+            "fallback_max_per_agent": 8,
+            "fallback_floor_agents": 2
+          }
+        },
+        "professional_farmer_retention": {
+          "enabled": true,
+          "min_operated_area": 35,
+          "min_agricultural_income_ratio": 0.82,
+          "max_off_farm_income": 10000,
+          "min_farming_ability": 1.0,
+          "preferred_age_min": 28,
+          "preferred_age_max": 52,
+          "legacy_farmer_age_max": 60,
+          "outflow_resistance_multiplier": 0.9,
+          "income_diversification_resistance_multiplier": 0.92,
+          "neighbor_pressure_resistance_multiplier": 0.9,
+          "elderly_exit_resistance_multiplier": 0.95,
+          "pluriactive_reentry_min_area": 35,
+          "pluriactive_reentry_ratio": 0.88,
+          "pluriactive_reentry_max_off_farm_income": 8000,
+          "pluriactive_reentry_prob": 0.015
+        }
+      },
+      "prospect_theory": {
+        "loss_aversion_lambda_dist": {
+          "type": "normal",
+          "mean": 2.25,
+          "std": 0.5
+        },
+        "value_function_curvature_dist": {
+          "type": "normal",
+          "mean": 0.55,
+          "std": 0.1
+        },
+        "probability_weighting_dist": {
+          "type": "normal",
+          "mean": 0.7,
+          "std": 0.05
+        }
+      },
+      "social": {
+        "network_radius": 5,
+        "average_degree": 8,
+        "transaction_avg_degree": 4,
+        "weak_tie_prob": 0.1,
+        "weak_tie_strength_floor": 0.18,
+        "social_learning_weight_dist": {
+          "type": "uniform",
+          "min": 0.2,
+          "max": 0.6
+        }
+      },
+      "bayesian_learning": {
+        "prior_alpha": 5.0,
+        "prior_beta": 5.0,
+        "decay_rate": 0.9,
+        "belief_weight": 0.3
+      },
+      "reference_point": {
+        "internal_orientation_dist": {
+          "type": "uniform",
+          "min": 0.5,
+          "max": 0.9
+        },
+        "safety_net_factor": 0.9
+      },
+      "labor_allocation": {
+        "default_by_strategy": {
+          "PURE_FARMER": {
+            "agricultural": 0.5,
+            "off_farm": 0.5
+          },
+          "PLURIACTIVE": {
+            "agricultural": 0.3,
+            "off_farm": 0.7
+          },
+          "NON_FARMER": {
+            "agricultural": 0.05,
+            "off_farm": 0.95
+          }
+        },
+        "elasticity": {
+          "wage_elasticity": 0.3,
+          "rental_price_elasticity": 0.2,
+          "risk_aversion_weight": 0.1
+        },
+        "switching_cost": 0.05,
+        "adjustment_speed": 0.2,
+        "use_endogenous_allocation": true
+      },
+      "reference_livelihood_distribution_nfps": {
+        "Pure_Farmer": 0.0647,
+        "Pluriactive": 0.1486,
+        "Non_Farmer": 0.7867
+      },
+      "consumption_payment": {
+        "mode": "cash_limited_no_credit",
+        "funds_basis": "capital_as_liquid_operating_balance"
+      }
+    },
+    "enterprise": {
+      "type_distribution": {
+        "AGRI_CORPORATION": 0.6,
+        "COOPERATIVE": 0.4
+      },
+      "types": {
+        "AGRI_CORPORATION": {
+          "initial_capital_dist": {
+            "type": "lognormal",
+            "mean": 14.74,
+            "std": 0.9
+          },
+          "efficiency_factor_dist": {
+            "type": "normal",
+            "mean": 1.65,
+            "std": 0.25
+          },
+          "risk_aversion_dist": {
+            "type": "normal",
+            "mean": 1.0,
+            "std": 0.3
+          },
+          "target_return_rate": 0.1,
+          "target_return_rate_std": 0.02,
+          "min_target_return_rate": 0.06,
+          "pct_with_rd_center": 0.806,
+          "pct_green_certified": 0.586
+        },
+        "COOPERATIVE": {
+          "initial_capital_dist": {
+            "type": "lognormal",
+            "mean": 14.1,
+            "std": 0.65
+          },
+          "efficiency_factor_dist": {
+            "type": "normal",
+            "mean": 1.45,
+            "std": 0.22
+          },
+          "risk_aversion_dist": {
+            "type": "normal",
+            "mean": 1.5,
+            "std": 0.4
+          },
+          "target_return_rate": 0.08,
+          "target_return_rate_std": 0.02,
+          "min_target_return_rate": 0.05,
+          "avg_land_contribution_area_mu": 460.1,
+          "avg_member_return_yuan": 1460.4
+        }
+      },
+      "family_farm_reference": {
+        "_source": "农业农村部专题稿",
+        "avg_grain_area_mu": 148.8,
+        "avg_net_profit_yuan": 116000
+      },
+      "portfolio_optimization": {
+        "default_correlation": 0.3,
+        "min_weight": 0.0,
+        "max_weight": 1.0
+      },
+      "crop_profitability_guard": {
+        "enabled": true,
+        "unprofitable_cash_min_grain_weight": 0.95,
+        "cash_profit_disadvantage_margin_yuan_per_mu": 50.0
+      },
+      "diseconomy": {
+        "supervision_cost_base": 50.0,
+        "supervision_cost_trigger_area": 100,
+        "labor_efficiency_loss_trigger_area": 300,
+        "labor_efficiency_loss_per_100mu": 0.02,
+        "labor_efficiency_loss_cap": 0.2
+      },
+      "return_rate_adaptation": {
+        "positive_trend_step": 0.02,
+        "negative_trend_step": 0.04,
+        "low_capital_drag": 0.02,
+        "mean_reversion": 0.12,
+        "floor_ratio": 0.7,
+        "ceiling_ratio": 1.25
+      },
+      "expansion_decision": {
+        "base_participation_probability": {
+          "AGRI_CORPORATION": 0.06,
+          "COOPERATIVE": 0.04
+        },
+        "new_operator_yield_penalty": {
+          "enabled": true,
+          "year_1_factor": 0.3,
+          "year_2_factor": 0.45,
+          "year_3_factor": 0.65,
+          "year_4_factor": 0.85,
+          "year_5_factor": 1.0
+        },
+        "factor_weights": {
+          "price_factor": 0.15,
+          "profit_factor": 0.25,
+          "efficiency_factor": 0.25,
+          "capital_factor": 0.2
+        },
+        "expansion_target": {
+          "min_area": 100,
+          "max_area_by_type": {
+            "AGRI_CORPORATION": 900,
+            "COOPERATIVE": 650
+          },
+          "starter_area_by_type": {
+            "AGRI_CORPORATION": 50,
+            "COOPERATIVE": 35
+          },
+          "expansion_ratio_range": [
+            0.3,
+            0.65
+          ]
+        },
+        "land_rent_demand_elasticity": 0.5
+      },
+      "population_dynamics": {
+        "enabled": true,
+        "count_anchor": "initial_farmer_count",
+        "target_ratio": 0.12,
+        "min_ratio": 0.07,
+        "max_ratio": 0.16,
+        "min_count": 45,
+        "max_count": 180,
+        "annual_entry_cap": 8,
+        "annual_exit_cap": 1,
+        "target_rebalance_enabled": true,
+        "target_rebalance_band": 3,
+        "entry_land_trigger_mu": 12,
+        "entry_profit_anchor": -0.02,
+        "exit_consecutive_loss_years": 5,
+        "exit_min_operated_area": 3,
+        "exit_capital_floor": 15000,
+        "exit_roi_floor": -0.08,
+        "initial_operated_land_share": 0.06,
+        "initial_max_area_per_enterprise": 28,
+        "financial_gate": {
+          "fixed_assets_per_mu": 600,
+          "equity_threshold": 0.21,
+          "sunk_exit_cost_share": 0.02,
+          "depreciation_rate": 0.1,
+          "cash_buffer": 0.1,
+          "provenance": "nfps_large_operator_bracketed"
+        },
+        "initial_owner_retained_area_mu": 2,
+        "initial_operational_contract_years": 45,
+        "startup_household_leasing_enabled": true,
+        "startup_owner_retained_area_mu": 2,
+        "startup_household_contract_years": 45
+      }
+    },
+    "village_collective": {
+      "village_mediation_share": 0.955,
+      "village_mediation_provenance": "nfps_estimated",
+      "enabled": true,
+      "num_villages": 4,
+      "role_type": "active",
+      "service_fee_rate": 0.03,
+      "mediation_success_boost": 0.2,
+      "integration_threshold": 28,
+      "min_integrated_area": 8,
+      "participation_rate": 0.6,
+      "spatial": {
+        "service_radius": 35,
+        "distance_decay": 0.03
+      },
+      "network": {
+        "nearest_neighbors": 2,
+        "long_tie_probability": 0.1,
+        "influence_weight": 0.15,
+        "assignment_mode": "nearest_only"
+      },
+      "subsidy_review": {
+        "enabled": true,
+        "actor_types": [
+          "farmer",
+          "enterprise"
+        ],
+        "direct_review_actor_types": [
+          "enterprise"
+        ],
+        "area_tolerance": 1e-06,
+        "grain_tolerance": 1e-06
+      },
+      "cross_village_governance": {
+        "enabled": true,
+        "max_contracts_per_link": 6,
+        "acceptance_threshold": 0.4,
+        "coordination_bonus": 0.12,
+        "contract_years": 3,
+        "rent_markup": 0.03,
+        "source_fee_share": 0.6,
+        "receiver_fee_share": 0.4
+      },
+      "grain_requirement": {
+        "enabled": true,
+        "ratio": 0.55,
+        "basic_farmland_ratio": 0.9,
+        "enforcement_strength": 0.9,
+        "policy_bias_strength": 0.75,
+        "policy_bias_cap": 0.99,
+        "policy_min_grain_weight": 0.96,
+        "security_gap_bias_strength": 0.3,
+        "security_gap_reference": 0.2,
+        "farmer_security_premium_per_mu": 45,
+        "farmer_security_gap_multiplier": 0.8,
+        "policy_signal_reference": 1.0,
+        "policy_signal_subsidy_weight": 0.65,
+        "policy_signal_price_weight": 0.35,
+        "non_compliance_floor": 0.82,
+        "applies_to": [
+          "enterprises_on_village_land",
+          "cooperatives"
+        ]
+      }
+    },
+    "grain_reserve_bureau": {
+      "enabled": true,
+      "annual_budget": 2800000,
+      "price_unit": "yuan_per_kg",
+      "floor_price": 2.58,
+      "ceiling_price": 2.97,
+      "initial_storage": 300000,
+      "storage_unit": "kg",
+      "max_storage_capacity": 3500000,
+      "min_safety_stock": 400000,
+      "storage_cost": 90,
+      "fiscal_cliff_threshold": 3,
+      "fiscal_cliff_reduction_rate": 0.15
+    },
+    "fiscal_system": {
+      "annual_subsidy_budget": 8000000,
+      "budget_source": "central_fiscal_transfer",
+      "budget_constraints": {
+        "hard_cap": true,
+        "overspending_threshold": 1.2,
+        "consecutive_overspending_years": 3,
+        "reduction_rate": 0.15,
+        "minimum_budget_ratio": 0.5
+      },
+      "arrears_mechanism": {
+        "enable": true,
+        "max_arrears_ratio": 0.3,
+        "clearance_rate": 0.5,
+        "interest_rate": 0.0
+      },
+      "budget_allocation": {
+        "area_subsidy": {
+          "enabled": true,
+          "rate": 83.0,
+          "target": "all_farmers"
+        },
+        "scale_subsidy": {
+          "enabled": true,
+          "threshold_area": 80,
+          "base_rate": 80.0,
+          "tiered_bonus": {
+            "enabled": true,
+            "tiers": [
+              {
+                "threshold": 100,
+                "bonus_rate": 10
+              },
+              {
+                "threshold": 300,
+                "bonus_rate": 5
+              }
+            ]
+          },
+          "target": "scale_grain_producers",
+          "calculation_method": "excess_area"
+        },
+        "grain_subsidy": {
+          "enabled": true,
+          "rate": 100.0,
+          "target": "grain_producers"
+        }
+      },
+      "ecological": {
+        "base_degradation_rate": 0.001,
+        "fertilizer_degradation_coef": 0.05,
+        "continuous_cropping_penalty": 0.0006,
+        "continuous_penalty_cap_years": 6,
+        "continuous_penalty_max": 0.002,
+        "active_management_recovery_rate": 0.0045,
+        "service_management_recovery_bonus": 0.0035,
+        "professional_management_recovery_bonus": 0.004,
+        "baseline_regeneration_rate": 0.0012,
+        "recovery_gap_bonus": 0.0015,
+        "managed_quality_ceiling_bonus": 0.05,
+        "fallow_recovery_rate": 0.1,
+        "rotation_bonus": 0.02,
+        "critical_threshold": 0.2,
+        "critical_recovery_penalty": 0.9,
+        "yield_quality_elasticity": 0.5,
+        "fertilizer_optimal_level": 120,
+        "fertilizer_max_effect": 1.2,
+        "fertilizer_overuse_threshold": 200
+      },
+      "p3_support": {
+        "rule": "area_universal",
+        "model_price_year": 2024,
+        "trial_price_year": 2024,
+        "trial_to_model": 1.0,
+        "service_2019_to_model": 1.0591333576379998,
+        "price_conversion_source": "config/experiments/national_real2024_cpi_20260909.csv; NBS annual national CPI; trial350 and preserved83 are author-authorized new 2024 mechanism baselines, not deflated policy observations",
+        "base_budget_yuan": 344159.49999999977,
+        "trial_budget_yuan": 877905.0,
+        "implementation_cost_yuan": 7046.943434999999,
+        "implementation_cost_rate": 0.008027,
+        "expected_area_claims_yuan": 0.0,
+        "expected_service_claims_yuan": 0.0,
+        "previous_actor_pool_nominal": null,
+        "expectation_source_step": 0,
+        "preserved_projects": [
+          {
+            "project_id": "land_protection_2024_condition",
+            "basis": "rights_area",
+            "rate": 83.0,
+            "price_year": 2024,
+            "to_model": 1.0,
+            "source": "author_new_2024_mechanism_baseline_not_observed_payment_mean",
+            "threshold_mu": 0.0,
+            "qualification_period": "annual",
+            "eligible_seasons": [],
+            "requires_cultivation": true
+          }
+        ],
+        "rate_origin": "b19_scenario",
+        "nominal_rate": 0.0,
+        "scenario_id": "b19_s0_m1_v1",
+        "scenario_rate_source": "author_frozen_B19_0_350_525_2024_real_per_mu_formal240"
+      }
+    }
+  },
+  "capitalization": {
+    "base_rate": 0.22,
+    "base_rate_provenance": "nfps_data_bracketed",
+    "base_rate_nfps_percentiles": {
+      "p25": 0.04,
+      "p50": 0.08,
+      "p75": 0.16,
+      "p90": 0.27
+    },
+    "base_rate_sensitivity_range": [
+      0.05,
+      0.08,
+      0.12,
+      0.22,
+      0.3
+    ],
+    "emergent_pass_through_enabled": false,
+    "emergent_pass_through_status": "diagnostic",
+    "emergent_pass_through_rate_range": [
+      0.01,
+      0.03
+    ],
+    "emergent_pass_through_evidence": "results/diagnostics/emergent_cap_final_30y_20260624/",
+    "emergent_pass_through_claim_boundary": "Model-internal emergent pass-through 0.01-0.03 via operational transfer ledger. Lower than stipulated 0.22 because transfer capacity constraints suppress rent capitalization. Priced auction contributes when capacity permits (23tx/14yr@30yr)."
+  },
+  "environment": {
+    "climate": {
+      "initial_soil_quality": 0.9,
+      "soil_degradation_rate": 0.0004,
+      "soil_recovery_rate_base": 0.0014,
+      "soil_recovery_gap_bonus": 0.0018,
+      "soil_quality_floor": 0.45,
+      "soil_yield_sensitivity": 0.55,
+      "soil_quality_ceiling_bonus": 0.06,
+      "extreme_weather_prob": 0.05,
+      "extreme_weather_loss": 0.1,
+      "favorable_weather_prob": 0.08,
+      "favorable_weather_gain": 0.055,
+      "spatial_hazards_enabled": true,
+      "spatial_hazard_prob": 0.05,
+      "spatial_max_loss": 0.12,
+      "spatial_favorable_prob": 0.08,
+      "spatial_max_gain": 0.06,
+      "minimum_yield_modifier": 0.84,
+      "maximum_yield_modifier": 1.1,
+      "hazard_cluster_size": 2.5
+    },
+    "land": {
+      "patches_per_farmer_dist": {
+        "type": "randint",
+        "min": 1,
+        "max": 3
+      },
+      "area_dist": {
+        "type": "lognormal",
+        "mu": 1.568,
+        "sigma": 1.029,
+        "min": 0.5,
+        "max": 500
+      },
+      "soil_quality_dist": {
+        "type": "grade_based",
+        "national_avg_grade": 4.76,
+        "grade_distribution": {
+          "high_quality": {
+            "probability": 0.3124,
+            "quality_range": [
+              0.95,
+              1.2
+            ]
+          },
+          "medium_quality": {
+            "probability": 0.4681,
+            "quality_range": [
+              0.75,
+              0.95
+            ]
+          },
+          "low_quality": {
+            "probability": 0.2195,
+            "quality_range": [
+              0.5,
+              0.75
+            ]
+          }
+        },
+        "regional_adjustment": {
+          "enabled": true,
+          "东北": {
+            "avg_grade": 3.59,
+            "quality_bonus": 0.1
+          },
+          "黄淮海": {
+            "avg_grade": 4.3,
+            "quality_bonus": 0.05
+          },
+          "长江中下游": {
+            "avg_grade": 4.8,
+            "quality_bonus": 0.0
+          },
+          "西南": {
+            "avg_grade": 5.2,
+            "quality_bonus": -0.03
+          },
+          "华南": {
+            "avg_grade": 5.5,
+            "quality_bonus": -0.05
+          },
+          "黄土高原": {
+            "avg_grade": 6.2,
+            "quality_bonus": -0.1
+          },
+          "内蒙古及长城沿线": {
+            "avg_grade": 5.8,
+            "quality_bonus": -0.08
+          },
+          "甘新": {
+            "avg_grade": 6.5,
+            "quality_bonus": -0.12
+          },
+          "青藏": {
+            "avg_grade": 7.0,
+            "quality_bonus": -0.15
+          }
+        },
+        "fallback": {
+          "type": "uniform",
+          "min": 0.5,
+          "max": 1.0
+        }
+      }
+    },
+    "market": {
+      "labor_demand_elasticity": -0.4,
+      "cash_crop_price_elasticity": -0.4,
+      "base_non_farm_wage": 190.0,
+      "grain_price_elasticity": -0.35,
+      "base_cash_crop_demand": 12000000,
+      "base_grain_demand": 5000000,
+      "grain_demand_annual_growth_rate": 0.016,
+      "non_farm_labor_base_demand": 150000,
+      "price_stickiness": {
+        "grain": 0.9,
+        "cash_crop": 0.9,
+        "wage": 0.85
+      },
+      "adjustment_rate": {
+        "labor": 0.05
+      },
+      "use_endogenous_pricing": true,
+      "base_prices": {
+        "grain": 1.25,
+        "cash_crop": 2.2
+      },
+      "price_limits": {
+        "grain": {
+          "min": 1.0,
+          "max": 2.0
+        },
+        "cash_crop": {
+          "min": 1.5,
+          "max": 3.5
+        }
+      },
+      "market_only_numeric_floor": 0.05,
+      "supply_demand_ratio_limits": {
+        "grain": {
+          "min": 0.2,
+          "max": 5.0
+        },
+        "cash_crop": {
+          "min": 0.2,
+          "max": 5.0
+        }
+      },
+      "base_land_rent": 288.09138703800744
+    }
+  },
+  "production": {
+    "yield_mode": "legacy_stack",
+    "yield_mode_claim_boundary": "legacy_stack: active yield path (multiplier stack). production_function_shadow: implemented in utils/yield_stack_runtime.py with NFPS-estimated elasticities (alpha=0.7026 land, beta=0.2547 labor, gamma=0.0173 capital; OLS on 5,654 obs, R2=0.61, returns-to-scale=0.9746). Input proxies are scale_factor, technology_multiplier, service_bonus_multiplier (NOT direct land/labor/capital measurements). shadow_cd_yield_kg trace field populated when yield_mode=production_function_shadow or when cobb_douglas.shadow_compare_enabled=true. The active returned yield remains legacy_stack unless a later audited production_function_active path is added. production_function_active: deferred. Requires direct factor input measurement at agent level (not just proxy multipliers).\n",
+    "base_yield": {
+      "grain": 549.9135493067851,
+      "cash_crop": 1133.1267941286108
+    },
+    "crop_components": {
+      "enabled": false,
+      "temperature": 0.65,
+      "scale_reference_mu": 50.0,
+      "soybean_min_share": 0.03,
+      "mechanized_crop_scale_bonus": 0.22,
+      "enterprise_mechanized_crop_bonus": 0.12,
+      "smallholder_rice_bonus": 0.08,
+      "rotation_soybean_bonus": 0.05
+    },
+    "cobb_douglas": {
+      "shadow_compare_enabled": false,
+      "alpha": 0.7026,
+      "beta": 0.2547,
+      "gamma": 0.0173,
+      "provenance": "nfps_ols_estimated",
+      "estimation_file": "restricted_inputs/nfps_production_function_estimates.json",
+      "claim_boundary": "NFPS OLS estimates from 5,654 household-year observations (2009-2015). Capital is proxied by total production expense (exp_prod). No regional fixed effects, no endogeneity correction. Returns-to-scale = 0.9746. Replaces previous literature-anchored defaults (Fuglie & Rada 2013).\n"
+    },
+    "yield_stack": {
+      "auxiliary_driver_panel": {
+        "path": "restricted_inputs/national_auxiliary_driver_panel.csv",
+        "max_runtime_observed_year": 2021,
+        "source": "training-window official auxiliary national panel with hold-forward semantics",
+        "claim_boundary": "Auxiliary drivers expose irrigation and disaster channels for mechanism audits. They are not by themselves strong calibration evidence or mature national forecast evidence."
+      },
+      "irrigation": {
+        "enabled": true,
+        "elasticity": 0.08,
+        "min_modifier": 0.96,
+        "max_modifier": 1.04,
+        "source_column": "effective_irrigation_to_grain_sown_area_ratio",
+        "claim_boundary": "Conservative candidate modifier relative to the earliest training-window irrigation ratio; must pass independent backtest before strong forecast claims."
+      },
+      "disaster_loss": {
+        "enabled": true,
+        "severity_weight": 0.12,
+        "min_modifier": 0.85,
+        "max_modifier": 1.0,
+        "climate_shock_fallback_weight": 0.6,
+        "source_column": "crop_disaster_affected_to_grain_sown_area_ratio",
+        "claim_boundary": "Conservative disaster-loss candidate modifier using training-window affected-area ratios, with climate fallback only when panel data are missing."
+      }
+    },
+    "ecological": {
+      "enabled": true,
+      "base_degradation_rate": 0.001,
+      "fertilizer_degradation_coef": 0.05,
+      "continuous_cropping_penalty": 0.0006,
+      "continuous_penalty_cap_years": 6,
+      "continuous_penalty_max": 0.002,
+      "active_management_recovery_rate": 0.0045,
+      "baseline_regeneration_rate": 0.0012,
+      "recovery_gap_bonus": 0.0015,
+      "service_management_recovery_bonus": 0,
+      "professional_management_recovery_bonus": 0.004,
+      "managed_quality_ceiling_bonus": 0.05,
+      "fallow_recovery_rate": 0.1,
+      "rotation_bonus": 0.02,
+      "critical_threshold": 0.2,
+      "critical_recovery_penalty": 0.9,
+      "soil_quality_floor": 0.45,
+      "yield_quality_elasticity": 0.5
+    },
+    "technology_progress": {
+      "enabled": true,
+      "apply_exogenous_yield_trend_multiplier": true,
+      "annual_yield_growth_rate": 0.006,
+      "grain_annual_yield_growth_rate": 0.01,
+      "cash_crop_annual_yield_growth_rate": 0.012,
+      "annual_tfp_growth": 0.001,
+      "diffusion_rate": 0.14,
+      "enterprise_adoption_rate": 0.35,
+      "patch_technology_diffusion_rate": 0.75,
+      "scale_efficiency_bonus": {
+        "threshold_area": 30,
+        "small_scale": 1.0,
+        "medium_scale": 1.08,
+        "large_scale": 1.15
+      }
+    },
+    "yield_factors": {
+      "soil_quality": {
+        "exponent": 0.8,
+        "min_effect": 0.82,
+        "max_effect": 1.08
+      },
+      "farming_ability": {
+        "min_multiplier": 0.8,
+        "max_multiplier": 1.2
+      },
+      "technology": {
+        "max_improvement": 0.12,
+        "base_level": 1.0
+      },
+      "enterprise_efficiency": {
+        "enabled": true,
+        "baseline": 1.0,
+        "yield_weight": 0.18,
+        "min_multiplier": 0.9,
+        "max_multiplier": 1.15
+      },
+      "structural_efficiency": {
+        "farmer_grain_scale_mechanization_weight": 0.035,
+        "farmer_grain_service_weight": 0,
+        "farmer_grain_service_mechanization_weight": 0,
+        "farmer_grain_professional_weight": 0.02,
+        "farmer_cash_scale_weight": 0.02,
+        "farmer_cash_service_weight": 0,
+        "farmer_cash_professional_weight": 0.01,
+        "enterprise_grain_mechanization_weight": 0.04,
+        "enterprise_grain_management_weight": 0.025,
+        "enterprise_grain_coordination_weight": 0.015,
+        "enterprise_cash_mechanization_weight": 0.025,
+        "enterprise_cash_management_weight": 0.02
+      },
+      "climate": {
+        "volatility": 0.05,
+        "mean": 0.0
+      },
+      "climate_resilience": {
+        "enabled": true,
+        "service_buffer": 0.18,
+        "professional_buffer": 0.14,
+        "management_buffer": 0.14,
+        "coordination_buffer": 0.08,
+        "technology_buffer": 0.1,
+        "soil_buffer": 0.1,
+        "scale_buffer": 0.08,
+        "max_total_buffer": 0.5,
+        "minimum_yield_modifier": 0.84
+      }
+    },
+    "production_elasticities": {
+      "alpha": 0.49589044448468567,
+      "beta": 0.08296070022796173,
+      "gamma": 0.5020937824902479
+    },
+    "random_noise": {
+      "std": 0.05,
+      "settlement_std": 0.02
+    },
+    "cost_structure": {
+      "input_prices": {
+        "seed": {
+          "grain": 5.0,
+          "cash_crop": 8.0
+        },
+        "fertilizer": 2.5,
+        "pesticide": 15.0,
+        "machinery": 50.0,
+        "small_tools": 20.0,
+        "large_machinery": 80.0
+      },
+      "input_requirements": {
+        "seed": {
+          "grain": 0.0,
+          "cash_crop": 0.0
+        },
+        "fertilizer": {
+          "grain": 0.0,
+          "cash_crop": 0.0
+        },
+        "pesticide": {
+          "grain": 0.0,
+          "cash_crop": 0.0
+        },
+        "labor_days": {
+          "grain": 4.359506127422804,
+          "cash_crop": 40.08598993288591,
+          "cash_crop_farmer": 40.08598993288591,
+          "grain_farmer": 4.359506127422804
+        },
+        "machinery_hours": {
+          "grain": 2,
+          "cash_crop": 3
+        },
+        "other_cost_per_mu": {
+          "grain": 437.11998404093464,
+          "cash_crop": 1280.2927334223994
+        },
+        "small_tools": {
+          "cash_crop": 0.0,
+          "grain": 0.0
+        }
+      },
+      "use_detailed_cost": true
+    },
+    "climate": {
+      "mean": 0.0,
+      "volatility": 0.15
+    },
+    "agricultural_service": {
+      "service_adoption_baseline": 0.632,
+      "service_adoption_provenance": "nfps_estimated",
+      "enabled": true,
+      "apply_direct_yield_bonus_multiplier": false,
+      "num_providers": 28,
+      "service_types": {
+        "full_trusteeship": {
+          "base_fee_per_mu": 420,
+          "min_fee": 320,
+          "max_fee": 520,
+          "coverage_ratio": 1.0,
+          "labor_reduction": 0.9,
+          "yield_bonus": 0.12,
+          "min_scale_required": 20
+        },
+        "partial_trusteeship": {
+          "base_fee_per_mu": 220,
+          "min_fee": 150,
+          "max_fee": 300,
+          "coverage_ratio": 0.6,
+          "labor_reduction": 0.6,
+          "yield_bonus": 0.06,
+          "min_scale_required": 8
+        },
+        "single_service": {
+          "base_fee_per_mu": 70,
+          "min_fee": 30,
+          "max_fee": 120,
+          "coverage_ratio": 0.35,
+          "labor_reduction": 0.35,
+          "yield_bonus": 0.03,
+          "min_scale_required": 2
+        }
+      },
+      "provider_economics": {
+        "scale_economy_factor": 0.15,
+        "initial_capacity": {
+          "min": 420.0,
+          "max": 1600.0
+        },
+        "service_radius": 18,
+        "equipment_investment": 50000,
+        "max_annual_expansion": 0.45
+      },
+      "farmer_decision": {
+        "labor_scarcity_threshold": 0.5,
+        "age_threshold": 55,
+        "scale_service_threshold_mu": 30,
+        "scale_service_max_bonus": 0.18,
+        "grain_specialization_service_bonus": 0.08,
+        "grain_policy_service_bonus": 0.12,
+        "policy_service_sensitivity_weight": 0.08,
+        "policy_price_floor_service_bonus": 0.04,
+        "policy_service_min_scale_mu": 8,
+        "policy_affordability_bonus": 0.1,
+        "non_farmer_retained_service_enabled": true,
+        "non_farmer_retained_service_min_area_mu": 12,
+        "non_farmer_retained_service_labor_sufficiency_cap": 0.2,
+        "cost_benefit_threshold": 1.2,
+        "repeat_purchase_bonus": 0.2
+      },
+      "land_transfer_substitution": {
+        "substitution_effect": 0.3
+      },
+      "data_collection": {
+        "track_service_area": true,
+        "track_provider_profits": true,
+        "track_farmer_participation": true
+      }
+    }
+  },
+  "runtime_fixed_rule": {
+    "type": "fixed_expected_net_return",
+    "accounting_basis": "action_conditioned_v1",
+    "inertia_basis": "yuan_per_mu",
+    "components": [
+      "expected_net_return",
+      "land_capacity",
+      "labor_capacity",
+      "service_capacity",
+      "minimum_inertia"
+    ],
+    "minimum_inertia_margin_yuan_per_mu": 50.0,
+    "feasible_thresholds": {
+      "min_land_capacity": 0.5,
+      "min_labor_capacity": 0.35,
+      "min_service_capacity": 0.5
+    },
+    "actions": {
+      "household": [
+        "maintain_grain",
+        "expand_cash",
+        "exit"
+      ],
+      "scale": [
+        "maintain_grain",
+        "expand_cash",
+        "contract"
+      ]
+    },
+    "initial_tenure_mode": "A",
+    "preproduction_cash": {
+      "mode": "reserved_no_credit",
+      "funds_basis": "capital_as_liquid_operating_balance"
+    },
+    "household_crop_portfolio": false
+  },
+  "market_sequence": {
+    "order": [
+      "government",
+      "environment_price_update",
+      "technology_update",
+      "climate_update",
+      "land_market_planning",
+      "village_collective",
+      "land_rental_market",
+      "labor_planning",
+      "service_market",
+      "labor_market",
+      "agent_production",
+      "annual_collection",
+      "population_dynamics",
+      "enterprise_demography"
+    ],
+    "preserve_annual_market_order": true
+  },
+  "disabled_mechanisms": [
+    "emotion",
+    "conformity",
+    "multiple_network_weights",
+    "farmer_learner",
+    "enterprise_q",
+    "government_q",
+    "government_q_extended",
+    "ppo_shadow",
+    "ppo_active"
+  ],
+  "r6_runtime_config_source": "master_config_copy_plus_v4_8_fixed_rule_overlay_plus_fixed_empirical_cohort",
+  "unified_paper_model": {
+    "enabled": true,
+    "service_environment_only": true,
+    "game_enabled": false,
+    "runtime_stage": "U3_unified_model_dynamic_qualification"
+  },
+  "u2_runtime_config_source": "master_copy_plus_fixed_rule_overlay_plus_r6_parameters_plus_fixed_cohort",
+  "u3_runtime_config_source": "u2_unified_model_plus_frozen_candidate_parameters",
+  "simulation": {
+    "gdp_growth_rate": 0.045
+  },
+  "paper_b_flagship_scenario": {
+    "scenario_id": "b19_s0_m1_v1",
+    "input_cost_growth_rate": 0.03,
+    "rental_growth_rate": 0.025,
+    "initial_grain_other_cost": 437.11998404093464,
+    "initial_cash_other_cost": 1280.2927334223994,
+    "initial_land_rent": 288.09138703800744
+  },
+  "monetary_representation": {
+    "price_year": 2024,
+    "cohort_year": 2010,
+    "coverage": "household_income_entrant_proxies_registered_runtime_money",
+    "formal_input_frozen": false,
+    "source_sha256": "d61baf5595d925d3e9761a3dfe7459c17c63a20c1b74a02769b7ad461aed2708",
+    "cpi_source": "restricted_inputs/national_real2024_cpi_20260909.csv",
+    "service_2019_to_model": 1.0591333576379998,
+    "runtime_money_basis": "restricted_inputs/national_real2024_money_basis_20260909.csv",
+    "remaining_freeze": "parent_acceptance_and_P3_budget_forecast_not_owned_by_currency_adapter"
+  },
+  "fiscal_system": {
+    "annual_subsidy_budget": 8000000,
+    "budget_source": "central_fiscal_transfer",
+    "budget_constraints": {
+      "hard_cap": true,
+      "overspending_threshold": 1.2,
+      "consecutive_overspending_years": 3,
+      "reduction_rate": 0.15,
+      "minimum_budget_ratio": 0.5
+    },
+    "arrears_mechanism": {
+      "enable": true,
+      "max_arrears_ratio": 0.3,
+      "clearance_rate": 0.5,
+      "interest_rate": 0.0
+    },
+    "budget_allocation": {
+      "area_subsidy": {
+        "enabled": true,
+        "rate": 83.0,
+        "target": "all_farmers"
+      },
+      "scale_subsidy": {
+        "enabled": true,
+        "threshold_area": 80,
+        "base_rate": 80.0,
+        "tiered_bonus": {
+          "enabled": true,
+          "tiers": [
+            {
+              "threshold": 100,
+              "bonus_rate": 10
+            },
+            {
+              "threshold": 300,
+              "bonus_rate": 5
+            }
+          ]
+        },
+        "target": "scale_grain_producers",
+        "calculation_method": "excess_area"
+      },
+      "grain_subsidy": {
+        "enabled": true,
+        "rate": 100.0,
+        "target": "grain_producers"
+      }
+    },
+    "ecological": {
+      "base_degradation_rate": 0.001,
+      "fertilizer_degradation_coef": 0.05,
+      "continuous_cropping_penalty": 0.0006,
+      "continuous_penalty_cap_years": 6,
+      "continuous_penalty_max": 0.002,
+      "active_management_recovery_rate": 0.0045,
+      "service_management_recovery_bonus": 0.0035,
+      "professional_management_recovery_bonus": 0.004,
+      "baseline_regeneration_rate": 0.0012,
+      "recovery_gap_bonus": 0.0015,
+      "managed_quality_ceiling_bonus": 0.05,
+      "fallow_recovery_rate": 0.1,
+      "rotation_bonus": 0.02,
+      "critical_threshold": 0.2,
+      "critical_recovery_penalty": 0.9,
+      "yield_quality_elasticity": 0.5,
+      "fertilizer_optimal_level": 120,
+      "fertilizer_max_effect": 1.2,
+      "fertilizer_overuse_threshold": 200
+    },
+    "p3_support": {
+      "rule": "area_universal",
+      "model_price_year": 2024,
+      "trial_price_year": 2024,
+      "trial_to_model": 1.0,
+      "service_2019_to_model": 1.0591333576379998,
+      "price_conversion_source": "config/experiments/national_real2024_cpi_20260909.csv; NBS annual national CPI; trial350 and preserved83 are author-authorized new 2024 mechanism baselines, not deflated policy observations",
+      "base_budget_yuan": 344159.49999999977,
+      "trial_budget_yuan": 877905.0,
+      "implementation_cost_yuan": 7046.943434999999,
+      "implementation_cost_rate": 0.008027,
+      "expected_area_claims_yuan": 0.0,
+      "expected_service_claims_yuan": 0.0,
+      "previous_actor_pool_nominal": null,
+      "expectation_source_step": 0,
+      "preserved_projects": [
+        {
+          "project_id": "land_protection_2024_condition",
+          "basis": "rights_area",
+          "rate": 83.0,
+          "price_year": 2024,
+          "to_model": 1.0,
+          "source": "author_new_2024_mechanism_baseline_not_observed_payment_mean",
+          "threshold_mu": 0.0,
+          "qualification_period": "annual",
+          "eligible_seasons": [],
+          "requires_cultivation": true
+        }
+      ],
+      "rate_origin": "b19_scenario",
+      "nominal_rate": 0.0,
+      "scenario_id": "b19_s0_m1_v1",
+      "scenario_rate_source": "author_frozen_B19_0_350_525_2024_real_per_mu_formal240"
+    }
+  },
+  "calibration_targets": {
+    "transfer_rates": {
+      "rent_out_rate": 0.1226,
+      "rent_in_rate": 0.0661,
+      "participation_rate": 0.1803
+    }
+  },
+  "regional_heterogeneity": {
+    "parameters": {
+      "东部": {
+        "land_transfer": {
+          "rent_out_rate": 0.109,
+          "rent_in_rate": 0.0518,
+          "participation_rate": 0.1503,
+          "rented_in_hh": 1850,
+          "rented_out_hh": 4418,
+          "avg_rented_in": 3.6,
+          "avg_land_area": 3.17,
+          "sample_size": 40532
+        },
+        "income_structure": {
+          "income_structure": {
+            "agricultural_ratio": 0.0262,
+            "wage_ratio": 0.169,
+            "other_ratio": 0.8048,
+            "_planting_coverage": 0.3413,
+            "_wage_coverage": 0.5063,
+            "_note": "覆盖率<50%表示缺失率较高，数值可能低估"
+          },
+          "livelihood_distribution": {
+            "非农型": 0.8934,
+            "兼业型": 0.0974,
+            "纯农型": 0.0093,
+            "_coverage": 0.3413,
+            "_n_classified": 13835,
+            "_n_unclassified": 26697
+          },
+          "income_stats": {
+            "mean": 53195.96,
+            "median": 40574.0,
+            "gini": 0.4339
+          },
+          "sample_size": 40532
+        },
+        "agricultural_dependency": {
+          "dependency_index": 0.3504,
+          "components": {
+            "income_dependency": 0.0262,
+            "land_endowment": 0.4881,
+            "transfer_activity": 0.0456
+          },
+          "interpretation": "低度依赖",
+          "sample_size": 40532
+        },
+        "land_distribution": {
+          "lognormal_params": {
+            "mu": 1.2323,
+            "sigma": 0.9722
+          },
+          "statistics": {
+            "mean": 5.28,
+            "median": 3.6,
+            "gini": 0.4766
+          },
+          "scale_distribution": {
+            "小规模(<5亩)": 0.6267,
+            "中规模(5-15亩)": 0.3202,
+            "大规模(15-50亩)": 0.0515,
+            "特大规模(>=50亩)": 0.0016
+          },
+          "sample_size": 24365
+        }
+      },
+      "中部": {
+        "land_transfer": {
+          "rent_out_rate": 0.1232,
+          "rent_in_rate": 0.0574,
+          "participation_rate": 0.1831,
+          "rented_in_hh": 2442,
+          "rented_out_hh": 4810,
+          "avg_rented_in": 3.86,
+          "avg_land_area": 4.21,
+          "sample_size": 39035
+        },
+        "income_structure": {
+          "income_structure": {
+            "agricultural_ratio": 0.0305,
+            "wage_ratio": 0.1153,
+            "other_ratio": 0.8542,
+            "_planting_coverage": 0.3714,
+            "_wage_coverage": 0.34,
+            "_note": "覆盖率<50%表示缺失率较高，数值可能低估"
+          },
+          "livelihood_distribution": {
+            "非农型": 0.8143,
+            "兼业型": 0.1537,
+            "纯农型": 0.032,
+            "_coverage": 0.3714,
+            "_n_classified": 14498,
+            "_n_unclassified": 24537
+          },
+          "income_stats": {
+            "mean": 41030.51,
+            "median": 32236.5,
+            "gini": 0.4245
+          },
+          "sample_size": 39035
+        },
+        "agricultural_dependency": {
+          "dependency_index": 0.3671,
+          "components": {
+            "income_dependency": 0.0305,
+            "land_endowment": 0.5477,
+            "transfer_activity": 0.0626
+          },
+          "interpretation": "低度依赖",
+          "sample_size": 39035
+        },
+        "land_distribution": {
+          "lognormal_params": {
+            "mu": 1.3036,
+            "sigma": 1.0237
+          },
+          "statistics": {
+            "mean": 5.66,
+            "median": 4.0,
+            "gini": 0.4581
+          },
+          "scale_distribution": {
+            "小规模(<5亩)": 0.5721,
+            "中规模(5-15亩)": 0.3694,
+            "大规模(15-50亩)": 0.057,
+            "特大规模(>=50亩)": 0.0016
+          },
+          "sample_size": 29032
+        }
+      },
+      "西部": {
+        "land_transfer": {
+          "rent_out_rate": 0.1298,
+          "rent_in_rate": 0.05,
+          "participation_rate": 0.1831,
+          "rented_in_hh": 2431,
+          "rented_out_hh": 5476,
+          "avg_rented_in": 5.22,
+          "avg_land_area": 6.02,
+          "sample_size": 42203
+        },
+        "income_structure": {
+          "income_structure": {
+            "agricultural_ratio": 0.035,
+            "wage_ratio": 0.1158,
+            "other_ratio": 0.8493,
+            "_planting_coverage": 0.5195,
+            "_wage_coverage": 0.3446,
+            "_note": "覆盖率<50%表示缺失率较高，数值可能低估"
+          },
+          "livelihood_distribution": {
+            "非农型": 0.8904,
+            "兼业型": 0.0851,
+            "纯农型": 0.0245,
+            "_coverage": 0.5195,
+            "_n_classified": 21924,
+            "_n_unclassified": 20279
+          },
+          "income_stats": {
+            "mean": 38846.63,
+            "median": 29521.0,
+            "gini": 0.4251
+          },
+          "sample_size": 42203
+        },
+        "agricultural_dependency": {
+          "dependency_index": 0.4218,
+          "components": {
+            "income_dependency": 0.035,
+            "land_endowment": 0.7196,
+            "transfer_activity": 0.0576
+          },
+          "interpretation": "低度依赖",
+          "sample_size": 42203
+        },
+        "land_distribution": {
+          "lognormal_params": {
+            "mu": 1.5363,
+            "sigma": 0.9628
+          },
+          "statistics": {
+            "mean": 7.3,
+            "median": 4.8,
+            "gini": 0.4925
+          },
+          "scale_distribution": {
+            "小规模(<5亩)": 0.5095,
+            "中规模(5-15亩)": 0.3836,
+            "大规模(15-50亩)": 0.0998,
+            "特大规模(>=50亩)": 0.0071
+          },
+          "sample_size": 34827
+        }
+      },
+      "东北": {
+        "land_transfer": {
+          "rent_out_rate": 0.1324,
+          "rent_in_rate": 0.1348,
+          "participation_rate": 0.2228,
+          "rented_in_hh": 2103,
+          "rented_out_hh": 2954,
+          "avg_rented_in": 29.96,
+          "avg_land_area": 20.94,
+          "sample_size": 22316
+        },
+        "income_structure": {
+          "income_structure": {
+            "agricultural_ratio": 0.2105,
+            "wage_ratio": 0.104,
+            "other_ratio": 0.6855,
+            "_planting_coverage": 0.6451,
+            "_wage_coverage": 0.3165,
+            "_note": "覆盖率<50%表示缺失率较高，数值可能低估"
+          },
+          "livelihood_distribution": {
+            "非农型": 0.3653,
+            "兼业型": 0.3447,
+            "纯农型": 0.29,
+            "_coverage": 0.6451,
+            "_n_classified": 14396,
+            "_n_unclassified": 7920
+          },
+          "income_stats": {
+            "mean": 38630.93,
+            "median": 30670.0,
+            "gini": 0.3968
+          },
+          "sample_size": 22316
+        },
+        "agricultural_dependency": {
+          "dependency_index": 0.5864,
+          "components": {
+            "income_dependency": 0.2105,
+            "land_endowment": 1,
+            "transfer_activity": 0.0942
+          },
+          "interpretation": "中度依赖",
+          "sample_size": 22316
+        },
+        "land_distribution": {
+          "lognormal_params": {
+            "mu": 2.6577,
+            "sigma": 1.2581
+          },
+          "statistics": {
+            "mean": 25.78,
+            "median": 15.9,
+            "gini": 0.5244
+          },
+          "scale_distribution": {
+            "小规模(<5亩)": 0.1481,
+            "中规模(5-15亩)": 0.3171,
+            "大规模(15-50亩)": 0.3967,
+            "特大规模(>=50亩)": 0.1382
+          },
+          "sample_size": 18121
+        }
+      }
+    }
+  },
+  "budget_basis": {
+    "id": "nfps_real2024_physical_grain_high",
+    "output_unit": {
+      "grain": "physical_kg",
+      "cash_crop": "revenue_equivalent_kg_not_physical"
+    },
+    "reference_prices_yuan_per_kg": {
+      "grain": 2.5,
+      "cash_crop": 4.4
+    },
+    "weights": "eligible_sample_sown_area_not_national",
+    "repair_cash_fraction": 1,
+    "income_assumption": "grain_physical_yield_times_reference_price; cash_reported_value_realized",
+    "machinery_assumption": "observed_machinery_in_base_cost_additional_services_incremental",
+    "price_year": 2024,
+    "operator_comparability": "enterprise_extra_machinery_and_labor_substitution_and_scale_savings_are_research_assumptions_not_NFPS_calibrated; farmer_scale_skill_service_adjustments_are_additional_assumptions",
+    "annual_anchor_application": "after_scenario_setup_before_year_zero"
+  },
+  "national_revision_20261118": {
+    "mode": "budget_finance",
+    "source_basis": "C_revised_source_plus_October_frozen_config_data",
+    "is_original_E_execution": false,
+    "finance_overlay_pending": true,
+    "initial_economic_mapping": "inherit_E_liquid_stock_reserve_and_reference_consumption",
+    "initial_core_readback_pending": true
+  }
+}

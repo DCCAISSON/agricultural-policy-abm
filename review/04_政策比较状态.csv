@@ -1,0 +1,13 @@
+﻿seed,rule,policy,status,incremental_grain_t,incremental_h0_income_yuan,fiscal_cost_difference_yuan,total_grain_kg,mean_h0_net_yuan,total_fiscal_yuan
+103,old,base,behavior_only,,,,3288038.760804937,44365.90369131204,994074.9789044005
+103,old,ordinary_post,locked_not_evaluated,,,,,,
+103,old,scale80_post,locked_not_evaluated,,,,,,
+103,portfolio,base,behavior_only,,,,3106774.2458858886,44634.948214368866,994690.1440114889
+103,portfolio,ordinary_post,locked_not_evaluated,,,,,,
+103,portfolio,scale80_post,locked_not_evaluated,,,,,,
+109,old,base,behavior_only,,,,3438430.252145105,44470.091122951264,997135.7123195096
+109,old,ordinary_post,locked_not_evaluated,,,,,,
+109,old,scale80_post,locked_not_evaluated,,,,,,
+109,portfolio,base,behavior_only,,,,3244127.216140672,45144.132292708666,998203.1248092689
+109,portfolio,ordinary_post,locked_not_evaluated,,,,,,
+109,portfolio,scale80_post,locked_not_evaluated,,,,,,

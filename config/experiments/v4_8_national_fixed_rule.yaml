@@ -1,0 +1,128 @@
+overlay_id: v4_8_national_fixed_rule
+model_version: V4.8
+task_id: Wave_1B_Task_3
+scope: national_fixed_rule_mainline
+claim_boundary: mechanism_smoke_only_not_formal_calibration_not_policy_effect_not_forecast
+
+experiment:
+  seed: 4803
+  steps: 3
+  replicates: 1
+  smoke_years:
+    start: 2010
+    count: 3
+
+policy:
+  policy_mode: rule
+  active_scenario: baseline_cash
+  rl_enabled: false
+  government:
+    adaptive_adjustment_enabled: false
+    policy_mode: rule
+
+mechanism_switches:
+  rent_market_enabled: true
+  crop_choice_enabled: true
+  acquaintance_network_enabled: false
+  use_learning_farmer: false
+  use_learning_enterprise: false
+  use_reputation_village: false
+  use_extended_government_rl: false
+
+disabled_mechanisms:
+  - emotion
+  - conformity
+  - multiple_network_weights
+  - farmer_learner
+  - enterprise_q
+  - government_q
+  - government_q_extended
+  - ppo_shadow
+  - ppo_active
+
+data:
+  national_primary_channels:
+    - CFPS
+    - NFPS
+  cfps_entrant_pool_years:
+    - 2010
+    - 2012
+    - 2014
+    - 2016
+  cfps_holdout_years_rejected:
+    - 2018
+    - 2020
+    - 2022
+  entrant_feature_library: data/derived_runtime/v4_8/cfps_entrant_feature_library_2010_2016.json
+  holdout_feature_library: config/cfps_feature_library.json
+  cles_status: out_of_scope_jiangsu_only_not_used_for_national_calibration
+
+market_sequence:
+  order:
+    - government
+    - environment_price_update
+    - technology_update
+    - climate_update
+    - land_market_planning
+    - village_collective
+    - land_rental_market
+    - labor_planning
+    - service_market
+    - labor_market
+    - agent_production
+    - annual_collection
+    - population_dynamics
+    - enterprise_demography
+  preserve_annual_market_order: true
+
+decision_rule:
+  type: fixed_expected_net_return
+  components:
+    - expected_net_return
+    - land_capacity
+    - labor_capacity
+    - service_capacity
+    - minimum_inertia
+  minimum_inertia_margin_yuan_per_mu: 50.0
+  feasible_thresholds:
+    min_land_capacity: 0.5
+    min_labor_capacity: 0.35
+    min_service_capacity: 0.5
+  actions:
+    household:
+      - maintain_grain
+      - expand_cash
+      - exit
+    scale:
+      - maintain_grain
+      - expand_cash
+      - contract
+
+runtime_smoke:
+  fixed_seed: 4803
+  years: 3
+  operators:
+    - operator_id: household_001
+      operator_type: household
+      previous_action: maintain_grain
+      grain_return: 900.0
+      cash_return: 940.0
+      exit_return: 700.0
+      land_capacity: 1.0
+      labor_capacity: 1.0
+      service_capacity: 1.0
+    - operator_id: scale_001
+      operator_type: scale
+      previous_action: maintain_grain
+      grain_return: 900.0
+      cash_return: 980.0
+      exit_return: 700.0
+      land_capacity: 1.0
+      labor_capacity: 0.9
+      service_capacity: 0.9
+
+protected_configs:
+  - path: config/master_config.yaml
+    sha256: 1703f41cfef895719e8aa9933f94e8bfea55e333ef2c83201a942ce6a6c3a1bf
+  - path: config/policy_params.json
+    sha256: 79efe811a9d72adf84105f8a42e1c92f92562d0923dbe89e40f63a7e9927b49f

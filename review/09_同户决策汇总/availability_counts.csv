@@ -1,0 +1,13 @@
+﻿seed,role,status,n
+103,cash,feasible,192
+103,keep,feasible,192
+103,min_positive_feasible,feasible,192
+103,min_positive_offered,feasible,192
+103,next_above_prior,feasible,185
+103,next_above_prior,not_available,7
+109,cash,feasible,198
+109,keep,feasible,198
+109,min_positive_feasible,feasible,198
+109,min_positive_offered,feasible,198
+109,next_above_prior,feasible,189
+109,next_above_prior,not_available,9
