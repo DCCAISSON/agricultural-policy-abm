@@ -207,7 +207,7 @@ def run(seed, rule, policy="base", paired_old=None, organizations=60):
     print("verified", output, flush=True)
 
 
-def estimate_crop_transitions(raw_file, excluded):
+def estimate_crop_transitions(raw_file, excluded, continuous=False):
     """One pre-simulation transition per independently linked, non-cohort household."""
     import pandas as pd
     import numpy as np
@@ -225,9 +225,14 @@ def estimate_crop_transitions(raw_file, excluded):
         pairs=[(i,j) for i,r in enumerate(a) for j,s in enumerate(b) if r[:2]==s[:2] and abs(s[2]-r[2]-1)<=1]
         rel=[a[i][0] for i,j in pairs if sum(x==i for x,y in pairs)==sum(y==j for x,y in pairs)==1]
         return 1 in rel and len(rel)>=2
-    p=p[p.hhid.map(linked) & (p.sow_food_y+p.sow_cash_y).gt(0)].copy()
+    p=p[p.hhid.map(linked)].copy()
     p['prior']=[crop_history_group(g,c) for g,c in zip(p.sow_food_x,p.sow_cash_x)]
     p['share']=p.sow_food_y/(p.sow_food_y+p.sow_cash_y)
+    if continuous:
+        p['prior']=p.prior.replace({'mixed_lower':'mixed','mixed_upper':'mixed'})
+        p['prior_share']=p.sow_food_x/(p.sow_food_x+p.sow_cash_x)
+        return {s:(g.prior_share.to_numpy(),g.share.to_numpy()) for s,g in p.groupby('prior')}
+    p=p[p.share.notna()].copy()
     # Five interior intervals plus the two exact endpoints. No evaluation-year observations.
     p['category']=np.where(p.share==0,0,np.where(p.share==1,6,1+np.minimum(4,(p.share*5).astype(int))))
     rows=[]
@@ -305,6 +310,10 @@ def run_area_structures(destination, mix_mode=None):
                *[req['labor_days'][t] for t in ('grain','cash_crop')]) for z,y in yield_map.items()}
     base=b.set_index('actor')
     transition=None
+    history=None
+    if mix_mode=='continuous':
+        history=estimate_crop_transitions(RAW,set(b.hhid.dropna()),continuous=True)
+        transition={}
     if mix_mode=='candidate':
         estimates=estimate_crop_transitions(RAW,set(b.hhid.dropna()))
         estimates.to_csv(dest/'transition_estimates.csv',index=False)
@@ -329,7 +338,7 @@ def run_area_structures(destination, mix_mode=None):
         if seed==103: cases.append(('repeat',60,1.))
         if mix_mode:
             cases=[('both',60,1.)]
-            if mix_mode=='candidate' and seed==103: cases.append(('repeat',60,1.))
+            if mix_mode in ('candidate','continuous') and seed==103: cases.append(('repeat',60,1.))
         for structure,n,supply in cases:
             name=f'{seed}_{structure}_{n}_{supply}'
             actors=[]
@@ -371,6 +380,7 @@ def run_area_structures(destination, mix_mode=None):
                               leased_mu=None,paid=None,budget_fraction_national=None) for z,q in target.items()})
             logs=[];contracts=[];offers=[];sars=[]
             if transition is not None: model.area_economy['transition']=transition
+            if history is not None: model.area_economy['continuous_crop_history']=history
             for yr in range(2011,2016):
                 model.step()
                 rows,orders,deals,sar=model.area_last
@@ -436,8 +446,8 @@ def run_area_structures(destination, mix_mode=None):
 
 if __name__ == "__main__" and __import__('sys').argv[1:2]==['crop-mix']:
     import sys
-    if len(sys.argv)!=4 or sys.argv[2] not in ('baseline','candidate'):
-        raise SystemExit('crop-mix baseline|candidate NEW_DIRECTORY')
+    if len(sys.argv)!=4 or sys.argv[2] not in ('baseline','candidate','continuous'):
+        raise SystemExit('crop-mix baseline|candidate|continuous NEW_DIRECTORY')
     run_area_structures(sys.argv[3],sys.argv[2])
 elif __name__ == "__main__" and __import__('sys').argv[1:2]==['area']:
     import sys

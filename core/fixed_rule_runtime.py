@@ -7,6 +7,20 @@ def crop_history_group(g,c):
     return 'mixed_lower' if g<c else 'mixed_upper'
 
 
+def continuous_crop_target(history, prior, share, u):
+    """Conditional share among historical planters; leaving production is not a zero grain share."""
+    import numpy as np
+    group='mixed' if prior.startswith('mixed') else prior
+    if group not in history: return None
+    x,y=history[group]
+    if group=='mixed':
+        distance=np.abs(x-share)
+        k=int(np.ceil(np.sqrt(len(x))))
+        y=y[distance<=np.partition(distance,k-1)[k-1]]
+    planted=np.sort(y[np.isfinite(y)])
+    return float(planted[min(int(u*len(planted)),len(planted)-1)]) if len(planted) else None
+
+
 def continuous_farm_plan(a, land, rights, cash, rent, years_inputs, trading):
     """Annual operating surplus on physical mu and crop-mu; no sale proceeds finance planting."""
     import numpy as np

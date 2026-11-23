@@ -3711,7 +3711,11 @@ class MainModel(Model):
                 u=int.from_bytes(token[:8],'big')/2**64
                 # Missing history has no estimated row: use the unconstrained old choice.
                 a.crop_mix_target=None
-                if prior in e['transition']:
+                if 'continuous_crop_history' in e:
+                    from core.fixed_rule_runtime import continuous_crop_target
+                    share=g0/(g0+c0) if g0+c0>1e-7 else None
+                    a.crop_mix_target=continuous_crop_target(e['continuous_crop_history'],prior,share,u)
+                elif prior in e['transition']:
                     cumulative,targets=e['transition'][prior]
                     j=min(int(np.searchsorted(cumulative,u,side='right')),len(targets)-1)
                     a.crop_mix_target=float(targets[j])

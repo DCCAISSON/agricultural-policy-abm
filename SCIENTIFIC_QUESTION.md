@@ -1,5 +1,7 @@
 # The One Scientific Question
 
+**本轮位置：家庭经营的跨年传导。** 政策改变收益以前，模型须分清谁愿意种、谁取得经营土地，以及实际经营者怎样配置粮经面积。一步条件份额预测和连续五年经营历史分别检验；本轮只报告两种经营规则的比较，不把差额作为财政支持的效果。
+
 > 项目唯一锚点。所有 spec、论文、PPT、图表、实验设计的故事必须从这一句出发，而不是从政策叙事、三轴框架、SCRI/IDI/AESI 任何一个分支出发。
 >
 > Single anchor. Every downstream spec, paper draft, slide deck, figure, and experiment must trace its narrative back to the question on this page — not to policy framings, not to the three-axis frame, not to any single diagnostic.
