@@ -1,0 +1,8 @@
+{
+  "core/model.py": "3291aa4c6f974f54e7aa5d30d84831afe8e10d2d63537512e47f20487282d6c9",
+  "core/fixed_rule_runtime.py": "3ad7795ffa2b99a165f626451c31037f817670aa17bd1aa31a1e9081ce4caf3a",
+  "scripts/audit_household_portfolio_behavior.py": "0702f9b1126542646dbeb54b8a2031c914b5dac4eba186e3eb95b39d7403b84c",
+  "scripts/run_national_household_portfolio.py": "b6d194782d63fd85ea851ee94c0f2a3877fd66aee326da45679c4b14b2401335",
+  "tests/test_household_crop_portfolio.py": "b965e742c2b1714d41cf4321052fa5310f72c02715d32d5c0034e6443097ed80",
+  "results/diagnostics/national_crop_mix_repair_20261123/freeze_review.py": "03182aaec464d21de8acf9507db437faed19a5da75f180f32824d18158999450"
+}

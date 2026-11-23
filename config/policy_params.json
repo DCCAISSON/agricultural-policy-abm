@@ -1,0 +1,204 @@
+{
+  "scenarios": {
+    "baseline_cash": {
+      "display_name": "基准面积现金补贴（强化版）",
+      "description": "按经营者面积发放现金补贴，基准补贴 350 元/亩。该值是模型内的强化型政策强度锚点，用于平衡粮食与经济作物收益差距；不是全国统一现实补贴标准。企业主体调整系数来自 policy subsidy_standards.subject_adjustment。注：grain_subsidies_rate=1.0表示使用base值。",
+      "grain_price_floor": 1.2,
+      "grain_subsidies_rate": 1.0,
+      "base_subsidy_per_mu": 350,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    },
+    "no_policy": {
+      "display_name": "无政策情景",
+      "description": "关闭粮价托底、面积补贴、实物补贴与延迟支付，用于反事实基线。",
+      "disable_grain_intervention": true,
+      "grain_price_floor": 0.0,
+      "grain_subsidies_rate": 0.0,
+      "base_subsidy_per_mu": 0,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "operator",
+      "subsidy_rate": 0.0,
+      "payment_lag": 0,
+      "cash_share": 1.0,
+      "in_kind_package": {}
+    },
+    "baseline_owner": {
+      "display_name": "基准所有者补贴",
+      "description": "按所有者面积发放现金补贴，基准补贴 100 元/亩，补贴率 15%。",
+      "grain_price_floor": 1.2,
+      "grain_subsidies_rate": 0.15,
+      "base_subsidy_per_mu": 100,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "owner",
+      "payment_lag": 0
+    },
+    "high_subsidy_owner": {
+      "display_name": "高补贴率所有者补贴",
+      "description": "按所有者面积发放高额现金补贴，基准补贴 150 元/亩，补贴率 25%。",
+      "grain_price_floor": 1.2,
+      "grain_subsidies_rate": 0.25,
+      "base_subsidy_per_mu": 150,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "owner",
+      "payment_lag": 0
+    },
+    "low_subsidy_owner": {
+      "display_name": "低补贴率所有者补贴",
+      "description": "按所有者面积发放低额现金补贴，基准补贴 50 元/亩，补贴率 5%。",
+      "grain_price_floor": 1.2,
+      "grain_subsidies_rate": 0.05,
+      "base_subsidy_per_mu": 50,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "owner",
+      "payment_lag": 0
+    },
+    "baseline_operator": {
+      "display_name": "基准经营者补贴",
+      "description": "按经营者面积发放现金补贴，基准补贴 100 元/亩，补贴率 15%。",
+      "grain_price_floor": 1.2,
+      "grain_subsidies_rate": 0.15,
+      "base_subsidy_per_mu": 100,
+      "subsidy_type": "area_based",
+      "delivery_mode": "cash",
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    },
+    "owner_tiered_cash": {
+      "display_name": "所有者分段现金补贴",
+      "description": "依据自有土地面积分段给予补贴，模拟部分地区对土地承包权人的支持。",
+      "grain_price_floor": 1.25,
+      "subsidy_type": "tiered_area",
+      "base_subsidy_per_mu": 120,
+      "tier_breakpoints": [
+        50,
+        150
+      ],
+      "tier_rates": [
+        0.12,
+        0.18,
+        0.22
+      ],
+      "delivery_mode": "cash",
+      "subsidy_target": "owner",
+      "payment_lag": 1
+    },
+    "mixed_in_kind_support": {
+      "display_name": "现金+实物综合补贴",
+      "description": "部分补贴以现金形式到账，部分转化为农资抵扣和技术培训。",
+      "grain_price_floor": 1.18,
+      "grain_subsidies_rate": 0.1,
+      "base_subsidy_per_mu": 90,
+      "subsidy_type": "area_based",
+      "delivery_mode": "mixed",
+      "cash_share": 0.5,
+      "in_kind_package": {
+        "fertilizer_offset_per_mu": 35,
+        "training_service_per_mu": 12
+      },
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    },
+    "high_support": {
+      "display_name": "重点产粮区托底补贴",
+      "description": "参考国家发展改革委2024年小麦最低收购价（1.3元/斤）及中央财政耕地地力保护补贴加码方案，对收入偏低或农业占比高的地区提供更强现金托底与土壤修复。政策依据：发改价格〔2023〕1314号、财政部财农〔2024〕83号。",
+      "grain_price_floor": 1.3,
+      "grain_subsidies_rate": 0.22,
+      "base_subsidy_per_mu": 150,
+      "subsidy_type": "area_based",
+      "delivery_mode": "mixed",
+      "cash_share": 0.7,
+      "in_kind_package": {
+        "fertilizer_offset_per_mu": 45,
+        "soil_recovery_service_per_mu": 20
+      },
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    },
+    "targeted_ai_shock": {
+      "display_name": "数字农业技术券补贴",
+      "description": "受数字乡村和智慧农业政策方向启发的机制情景，以AI服务券+培训抵扣表示信息治理和服务能力改善。当前用于机制探针，不代表已经被现实验证的AI最优政策。",
+      "grain_price_floor": 1.15,
+      "grain_subsidies_rate": 0.12,
+      "base_subsidy_per_mu": 80,
+      "subsidy_type": "area_based",
+      "delivery_mode": "mixed",
+      "cash_share": 0.4,
+      "in_kind_package": {
+        "ai_service_credit_per_mu": 50,
+        "training_service_per_mu": 25
+      },
+      "subsidy_target": "operator",
+      "payment_lag": 0
+    }
+  },
+  "subsidy_standards": {
+    "wheat": {
+      "base": 118,
+      "unit": "元/50kg",
+      "region_adjustment": {
+        "northeast": 1.1,
+        "huanghuaihai": 1.05,
+        "south": 0.95
+      },
+      "subject_adjustment": {
+        "farmer": 1.0,
+        "enterprise": 1.15,
+        "cooperative": 1.1
+      },
+      "policy_source": "国家发改委2023-1314号，https://zfxxgk.ndrc.gov.cn/web/iteminfo.jsp?id=20276"
+    },
+    "corn": {
+      "base": 105,
+      "unit": "元/50kg",
+      "region_adjustment": {
+        "northeast": 1.15,
+        "huanghuaihai": 1.08,
+        "south": 0.92
+      },
+      "subject_adjustment": {
+        "farmer": 1.0,
+        "enterprise": 1.15,
+        "cooperative": 1.1
+      },
+      "policy_source": "农业农村部2024年粮食补贴政策"
+    },
+    "soybean": {
+      "base": "产值80%上限，详见财政部2024-83号",
+      "unit": "元/亩",
+      "region_adjustment": {
+        "northeast": 1.2,
+        "midwest": 1.15,
+        "east": 1.0
+      },
+      "subject_adjustment": {
+        "farmer": 1.0,
+        "enterprise": 1.1,
+        "cooperative": 1.08
+      },
+      "policy_source": "财政部2024-83号，https://jrs.mof.gov.cn/zhengcefabu/phjr/202409/t20240926_3944456.htm"
+    },
+    "cotton": {
+      "base": "详见各省财政厅公告",
+      "unit": "元/亩",
+      "region_adjustment": {
+        "xinjiang": 1.3,
+        "henan": 1.1,
+        "others": 1.0
+      },
+      "subject_adjustment": {
+        "farmer": 1.0,
+        "enterprise": 1.12,
+        "cooperative": 1.1
+      },
+      "policy_source": "新疆财政厅2024年公告等"
+    }
+  },
+  "notes": "本政策库混合了三类参数：官方价格/财政政策锚点、地方补贴标准范围、模型内部实验强度。不得把所有情景数值都表述为全国统一现实政策标准；引用时必须标注 source_type 和 evidence_boundary。"
+}

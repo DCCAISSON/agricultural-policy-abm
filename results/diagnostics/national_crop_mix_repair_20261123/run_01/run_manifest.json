@@ -1,0 +1,162 @@
+{
+  "parent": "a8ef70620028b6031fedfe874cfdc7d5acd22dd6",
+  "years": [
+    2011,
+    2012,
+    2013,
+    2014,
+    2015
+  ],
+  "initial": 2010,
+  "seeds": [
+    103,
+    109
+  ],
+  "repeat": 103,
+  "policy": "P0_rights_cultivated",
+  "training": false,
+  "households": 600,
+  "organizations": 60,
+  "protocols": {
+    "mixed_rate": 0.1,
+    "quantile_mae": 0.15,
+    "annual_change_error": 0.15,
+    "all_years_required": true
+  },
+  "survey_inputs": {
+    "2009-2015household.csv": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+    "2009-2015individual.csv": "babc85347ba844ed8f9e0a5de2dbc4c38055a99173eab707e27a46bd4c5e232e",
+    "household variables2009-2015.xlsx": "f7e4b203b2816e74eda67a55a9e8e2bf4153fe3d26f4062552d66a6d48bf86d2",
+    "2009-2017农户调查问卷.pdf": "5d72b343c305887b8d26d64fa49f004b02e9355d0f6742c6d0757273d383f523",
+    "national_real2024_cpi_20260909.csv": "8ad1df21424e5eac9139779f1d7551c2e248f2a05c3b0bca7d59841a3e290b3e"
+  },
+  "authorized_inputs": [
+    {
+      "file": "prepared_input_config.json",
+      "sha256": "9c9ba5b68219c9c090706372b16c4d7ee2140a352dd019a18b3b6b44bc379a6c"
+    },
+    {
+      "file": "cohort600_seed17_baseline_money2024.json",
+      "sha256": "065d0a17675bbae13dc0fec38a8fe5e4cb4f5c166ad0f8ef252339092c6a02a9"
+    },
+    {
+      "file": "fiscal_reference.json",
+      "sha256": "48480842eb9b61ec19c1592f36a94a70dde64f12792fd0e5aef330c14defc094"
+    },
+    {
+      "file": "production_finance_overlay.yaml",
+      "sha256": "7477c4e06fb527c89bb3817224a532e3d1ce65ade5695ce22fa56ea3b4b6f326"
+    },
+    {
+      "file": "nbs_rural_population.json",
+      "sha256": "22ff7a2682a91660beea0d8dd79adad054631b671262310e973730083f4fb79c"
+    },
+    {
+      "file": "cfps_entrants_money2024.json",
+      "sha256": "eb3205e954584d902e3084982e4de61f781fcd4963b4b450d8c2da0999b6cffb"
+    },
+    {
+      "file": "cfps_feature_library.json",
+      "sha256": "86d7a25cd8108abcb79c1a4fa0ef4a4a6d87c6e8feffd6f423a0f00d46fb0568"
+    },
+    {
+      "file": "agent_feature_library.json",
+      "sha256": "b0334a8175294b468721759d5c035bd006ae455dbbbc9c512d3d4f1307815f70"
+    },
+    {
+      "file": "calibration_results_2009_2015.json",
+      "sha256": "7c460816eb1a3f21e56518e856b47bf9b2a114752b1ea0bb281ca6e8a0f8f948"
+    },
+    {
+      "file": "initial_conditions_2020.yaml",
+      "sha256": "481adade1b6ab0a1a29c3fea8c9c6d1f69156489a6a3dcc0dae5c2773938334d"
+    },
+    {
+      "file": "calibration_config.yaml",
+      "sha256": "8682d117f160c01c095c9dc754ba56e96f4bff4d87b99169ca6cd5ed28da4204"
+    },
+    {
+      "file": "calibrated_params_enhanced.json",
+      "sha256": "b70371ee4752288c73ab9aee31d8bc9ac5019fa7d5afa055caf5f84575c970a4"
+    },
+    {
+      "file": "nfps_production_function_estimates.json",
+      "sha256": "f870df41705af85b8ad6b61e9957d2ee99d9e0093e7caf82f6557721abaa649b"
+    },
+    {
+      "file": "national_auxiliary_driver_panel.csv",
+      "sha256": "0104a3e37e58061ad8571b05390bad3cd38dd15fc0094c59d16503e546d678ca"
+    },
+    {
+      "file": "national_real2024_cpi_20260909.csv",
+      "sha256": "8ad1df21424e5eac9139779f1d7551c2e248f2a05c3b0bca7d59841a3e290b3e"
+    },
+    {
+      "file": "national_real2024_money_basis_20260909.csv",
+      "sha256": "8b5baa423e5585a9101c810e966783a8f133918fbf11273f167151efa77f7ff5"
+    },
+    {
+      "file": "preparation_manifest.json",
+      "sha256": "b8dd7009a8c03ace4298c35120341aba8f4b57bc71f04e89c179236b854026e8"
+    },
+    {
+      "file": "release_01.json",
+      "sha256": "54ae037ffc02b3369f6ff6b04cddff206f6c6790f2553535112a6211a3e54d5a"
+    }
+  ],
+  "economics": {
+    "references": {
+      "nfps_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+      "nfps_year": 2010,
+      "labor_proxy_households": 16,
+      "budget_sha256": "820649aa311899d029d2a5dee225c10ccecae4601ef57f7e3cfa1dffd8d19055",
+      "crop_budget_eligible": {
+        "水果": 35,
+        "稻谷": 134,
+        "蔬菜": 147
+      },
+      "sales_comparable": {
+        "水果": 32,
+        "稻谷": 96,
+        "蔬菜": 108
+      },
+      "sold_fraction_by_crop": {
+        "水果": 0.979662096042067,
+        "稻谷": 0.9118053076389026,
+        "蔬菜": 0.8389875350552948
+      },
+      "unmapped_province_rows": {
+        "55": 389
+      },
+      "grain_positive_sown_valid_output": {
+        "东北": 2454,
+        "东部": 3119,
+        "中部": 4043,
+        "西部": 4418
+      }
+    },
+    "cash_sale": 5130.555550127287,
+    "cash_sale_n": 147,
+    "deflator": 1.3233024062312413,
+    "source_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+    "cohort_sha256": "065d0a17675bbae13dc0fec38a8fe5e4cb4f5c166ad0f8ef252339092c6a02a9",
+    "unverified_rights": 50,
+    "positive_intensity_proxy": 22,
+    "other_sown_gap_mu": 947.3999963924289
+  },
+  "tests_command": "python -B -X utf8 -m pytest -q tests/test_government_q_project_20261119.py tests/test_household_crop_portfolio.py tests/test_n1_action_income.py tests/test_n1_lease_execution.py tests/test_national_actor_trace.py tests/test_national_plot_use_evidence.py tests/test_national_preproduction_cash_20261118.py tests/test_p3_project_payment_boundaries_20260909.py tests/test_p3_project_payments_20260909.py tests/test_run_national_government_q_20261119.py --junitxml=OUT/run_01/tests.xml",
+  "software": {
+    "mesa": "3.3.1",
+    "numpy": "2.4.0",
+    "pandas": "2.3.3",
+    "scipy": "1.16.3",
+    "pytest": "9.0.2"
+  },
+  "checks": {
+    "original_receipts_identical": 10,
+    "repeat_receipts_identical": 5,
+    "household_budget_rows": 30000,
+    "passing_behavior_seed_years": 6,
+    "total_behavior_seed_years": 10
+  }
+}

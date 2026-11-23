@@ -1,0 +1,19 @@
+parameter,value,basis,unit
+conditional crop share,estimated,2009-2010 NFPS non-cohort transitions; positive next-year sowing,probability and share
+mixed share grid,5,equal-width interior bins; target is conditional sample mean,bins
+grain price,2.5,baseline price converted from jin,yuan/kg
+grain sold fraction,0.9118053076389026,"rice sales quantity over output, comparable budget records",fraction
+cash crop revenue,5130.555550127287,vegetable and fruit sale amounts / sown area; no second sales discount,2024 yuan/sown mu
+hired wage,120.0,unchanged baseline,yuan/day
+available labor,120 / 180 / 176,NFPS laborers x CFPS group proxy: paid / no paid / unknown,days/worker/year
+P0,83.0,verified cultivated physical rights; paid after harvest,yuan/mu
+budget,344159.49999999977,fixed annual cap,yuan
+intensity,household specific,2010 annual two-crop sowings / year-end area; regional median if not positive,sown mu/physical mu
+东北_grain,472.0,2010 NFPS regional median,kg/sown mu
+东部_grain,433.3333333333333,2010 NFPS regional median,kg/sown mu
+中部_grain,400.0000068119595,2010 NFPS regional median,kg/sown mu
+西部_grain,385.0925919728352,2010 NFPS regional median,kg/sown mu
+grain_labor_days,4.359506127422804,effective baseline crop budget; no second machinery charge,days/sown mu
+cash_crop_labor_days,40.08598993288591,effective baseline crop budget; no second machinery charge,days/sown mu
+grain_other_cost_per_mu,437.11998404093464,effective baseline crop budget; no second machinery charge,2024 yuan/sown mu
+cash_crop_other_cost_per_mu,1280.2927334223994,effective baseline crop budget; no second machinery charge,2024 yuan/sown mu
