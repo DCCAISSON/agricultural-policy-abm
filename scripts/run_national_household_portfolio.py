@@ -17,7 +17,7 @@ FILES = ("decision_trace.json", "actors.jsonl", "cash_flow.json", "fiscal_accoun
          "land.json", "lease_transactions.json", "government_sar.json")
 
 
-def v1_household_inputs():
+def v1_household_inputs(cohort=None):
     """Use only pre-simulation NFPS observations; never join a CFPS person to a farm."""
     import pandas as pd
     from core.extract_microdata_features import REGION_MAPPING
@@ -25,7 +25,7 @@ def v1_household_inputs():
     job = old.read(MANIFEST)["jobs"][8]
     file = Path(job["cohort"])
     assert old.digest(file) == job["cohort_sha256"]
-    cohort = pd.DataFrame(old.read(file)["farmers"])
+    if cohort is None: cohort = pd.DataFrame(old.read(file)["farmers"])
     raw = pd.read_csv(RAW, usecols=["year","smgen","hhnumbers","hhlabornum","sow_food","prod_food",
                                     "inc_wage_l","inc_wage_o"])
     origin = raw.iloc[cohort.source_row.to_numpy()-2].reset_index(drop=True).copy()
@@ -207,21 +207,22 @@ def run(seed, rule, policy="base", paired_old=None, organizations=60):
     print("verified", output, flush=True)
 
 
-def estimate_crop_transitions(raw_file, excluded, continuous=False):
+def estimate_crop_transitions(raw_file, excluded, continuous=False, end_year=2010, regional_pairs=False):
     """One pre-simulation transition per independently linked, non-cohort household."""
     import pandas as pd
     import numpy as np
     from core.fixed_rule_runtime import crop_history_group
     d=pd.read_csv(raw_file,usecols='year hhid id samplast smgen sow_food sow_cash'.split(),
                   dtype={'hhid':'string','id':'string'})
-    d=d[d.year.isin([2009,2010]) & ~d.duplicated(['year','hhid'],keep=False) &
+    years=[end_year-1,end_year]
+    d=d[d.year.isin(years) & ~d.duplicated(['year','hhid'],keep=False) &
         d.hhid.eq(d.id) & ~d.hhid.isin(excluded) & d[['sow_food','sow_cash']].ge(0).all(axis=1)]
-    p=d[d.year.eq(2009)].merge(d[d.year.eq(2010)&d.samplast.eq(1)],on=['hhid','smgen'],validate='1:1')
+    p=d[d.year.eq(years[0])].merge(d[d.year.eq(end_year)&d.samplast.eq(1)],on=['hhid','smgen'],validate='1:1')
     m=pd.read_csv(raw_file.parent/'2009-2015individual.csv',usecols=['year','hhid','relation','sex','age'],dtype={'hhid':'string'})
-    m=m[m.year.isin([2009,2010]) & m.hhid.isin(p.hhid) & m.sex.isin([1,2]) & m.age.between(0,110)]
+    m=m[m.year.isin(years) & m.hhid.isin(p.hhid) & m.sex.isin([1,2]) & m.age.between(0,110)]
     roster={(k,y):list(g[['relation','sex','age']].itertuples(index=False,name=None)) for (k,y),g in m.groupby(['hhid','year'])}
     def linked(k):
-        a,b=roster.get((k,2009),[]),roster.get((k,2010),[])
+        a,b=roster.get((k,years[0]),[]),roster.get((k,end_year),[])
         pairs=[(i,j) for i,r in enumerate(a) for j,s in enumerate(b) if r[:2]==s[:2] and abs(s[2]-r[2]-1)<=1]
         rel=[a[i][0] for i,j in pairs if sum(x==i for x,y in pairs)==sum(y==j for x,y in pairs)==1]
         return 1 in rel and len(rel)>=2
@@ -231,6 +232,7 @@ def estimate_crop_transitions(raw_file, excluded, continuous=False):
     if continuous:
         p['prior']=p.prior.replace({'mixed_lower':'mixed','mixed_upper':'mixed'})
         p['prior_share']=p.sow_food_x/(p.sow_food_x+p.sow_cash_x)
+        if regional_pairs: return p[['hhid','smgen','prior','prior_share','share']]
         return {s:(g.prior_share.to_numpy(),g.share.to_numpy()) for s,g in p.groupby('prior')}
     p=p[p.share.notna()].copy()
     # Five interior intervals plus the two exact endpoints. No evaluation-year observations.
@@ -258,15 +260,27 @@ def run_area_structures(destination, mix_mode=None):
     private.mkdir()
     geo={p:r for r,ps in REGION_MAPPING.items() for p in ps}
     cfg,econ,budget,_=legacy.load_base()
-    rates,workers,ratios,refs=v1_household_inputs()
     cfg['runtime_fixed_rule'].update(national_v1=True,initial_tenure_mode='A')
     cfg['scale'].update(n_enterprises=90,enterprise_ratio=90/600)
     job=old.read(MANIFEST)['jobs'][8]
     cohort=pd.DataFrame(old.read(Path(job['cohort']))['farmers'])
+    frozen=cohort
+    soft=mix_mode in ('B','Bmid','Blow','Bhigh','D','Dmid','Dlow','Dhigh')
+    calibrated=mix_mode in ('C','D','Dmid','Dlow','Dhigh')
+    factorial=soft or calibrated
+    if factorial:
+        from scripts.prepare_nfps_v3 import candidate_cohort
+        candidate=candidate_cohort()
+        if calibrated: cohort=candidate
+    rates,workers,ratios,refs=v1_household_inputs(cohort)
     cols='year hhid id smgen hhnumbers area_e area_e1 area_in1 area_de2 sow_food sow_cash sow_total prod_food saving_1 saving_2 inc_wage_l inc_wage_o'.split()
     dictionary=pd.read_excel(RAW.parent/'household variables2009-2015.xlsx',header=None)
     dictionary[dictionary[0].isin(cols+['hhlabornum','prod_food'])].to_csv(dest/'survey_dictionary.csv',index=False)
     raw=pd.read_csv(RAW,usecols=cols,dtype={'hhid':'string','id':'string'})
+    original=raw.iloc[frozen.source_row.to_numpy()-2]
+    if factorial:
+        from scripts.prepare_nfps_v3 import clean_area
+        clean_area(raw)
     b=raw.iloc[cohort.source_row.to_numpy()-2].reset_index(drop=True).copy()
     assert b.year.eq(2010).all() and b.hhnumbers.eq(cohort.family_size).all() and len(b)==600
     b['actor']=cohort.cohort_agent_id
@@ -302,7 +316,7 @@ def run_area_structures(destination, mix_mode=None):
     cash_sale=(sell.sales_amount*sell.to_2024).sum()/sell.area.sum()
     req=cfg['production']['cost_structure']['input_requirements']
     pp=cfg['fiscal_system']['p3_support']
-    zones=sorted(b.smgen.unique())
+    zones=sorted(set(b.smgen)|set(original.smgen))
     yield_map={int(z):rates[geo[z]] for z in zones}
     target={int(z):float(b.loc[b.smgen==z,'sow_food'].sum()*yield_map[z]) for z in zones}
     inputs={z:(y*cfg['environment']['market']['base_prices']['grain']*2*ratios['grain'],
@@ -311,8 +325,33 @@ def run_area_structures(destination, mix_mode=None):
     base=b.set_index('actor')
     transition=None
     history=None
-    if mix_mode=='continuous':
-        history=estimate_crop_transitions(RAW,set(b.hhid.dropna()),continuous=True)
+    if mix_mode in ('continuous','C'):
+        history=estimate_crop_transitions(RAW,set(original.hhid.dropna()),continuous=True)
+        transition={}
+    if soft:
+        excluded=set(original.hhid)|set(raw.iloc[candidate.source_row.to_numpy()-2].hhid)
+        pairs=[];annual={}
+        for yr in (2010,2011,2012):
+            p=estimate_crop_transitions(RAW,excluded,True,yr,True)
+            p['region']=p.smgen.map(geo);pairs.append(p)
+            h=pd.concat(pairs)
+            annual[yr]={z:{s:(g.prior_share.to_numpy(),g.share.to_numpy()) for s,g in rx.groupby('prior')}
+                        for z,rx in h.groupby('region')}
+        premium=np.median([cash_sale-req['other_cost_per_mu']['cash_crop']-(rates[z]*cfg['environment']['market']['base_prices']['grain']*2*ratios['grain']-req['other_cost_per_mu']['grain']) for z in rates])
+        penalty=premium*{'Blow':.5,'Dlow':.5,'Bmid':1.,'Dmid':1.}.get(mix_mode,1.5)
+        penalties=None
+        if mix_mode in ('B','D'):
+            past=estimate_crop_transitions(RAW,set(),True,2010,True)
+            past=past.dropna(subset=['prior_share','share']).copy()
+            final=np.select([past.share.eq(0),past.share.eq(1)],['cash','grain'],default='mixed')
+            past['switched']=past.prior.ne(final)
+            regional=past[~past.hhid.isin(excluded)].groupby(past.smgen.map(geo)).switched.mean()
+            measured=b.hhid.map(past.set_index('hhid').switched)
+            tendency=measured.where(measured.notna(),b.region.map(regional)).astype(float)
+            assert tendency.between(0,1).all()
+            penalties=dict(zip(b.actor,premium*(1.5-.5*tendency)))
+            pd.DataFrame(dict(actor=b.actor,observed=measured.notna(),switch_proxy=tendency,
+                              penalty=b.actor.map(penalties))).to_csv(private/'historical_mobility.csv',index=False)
         transition={}
     if mix_mode=='candidate':
         estimates=estimate_crop_transitions(RAW,set(b.hhid.dropna()))
@@ -338,12 +377,13 @@ def run_area_structures(destination, mix_mode=None):
         if seed==103: cases.append(('repeat',60,1.))
         if mix_mode:
             cases=[('both',60,1.)]
-            if mix_mode in ('candidate','continuous') and seed==103: cases.append(('repeat',60,1.))
+            if (mix_mode in ('candidate','continuous') or factorial) and seed==103: cases.append(('repeat',60,1.))
         for structure,n,supply in cases:
             name=f'{seed}_{structure}_{n}_{supply}'
             actors=[]
             for a in families:
                 count,paid,imputed=workers[str(a.unique_id)]
+                if calibrated: a.household_size=int(base.loc[a.unique_id,'hhnumbers'])
                 a.set_v1_labor(count,paid)
                 a.initialize_area_household(base.loc[a.unique_id])
                 if transition is not None:
@@ -359,7 +399,7 @@ def run_area_structures(destination, mix_mode=None):
                 split=n//30
                 weights=rng.lognormal(0,.6,base_count);weights/=weights.sum()
                 weights=np.repeat(weights/split,split)
-                rz=np.repeat(rng.choice(b.smgen,base_count),split)
+                rz=np.repeat(rng.choice(original.smgen,base_count),split)
                 for j,(w,z) in enumerate(zip(weights,rz)):
                     index=j+(0 if kind=='AGRI_CORPORATION' else round(n*.6))
                     a=orgs[index]
@@ -382,6 +422,9 @@ def run_area_structures(destination, mix_mode=None):
             if transition is not None: model.area_economy['transition']=transition
             if history is not None: model.area_economy['continuous_crop_history']=history
             for yr in range(2011,2016):
+                if soft:
+                    model.area_economy.update(regional_history=annual[min(2012,yr-1)],macro_region=geo,crop_penalty=penalty)
+                    if penalties is not None:model.area_economy['actor_crop_penalty']=penalties
                 model.step()
                 rows,orders,deals,sar=model.area_last
                 ar=pd.DataFrame(rows); logs.append(ar);offers.extend(dict(year=yr,**o) for o in orders)
@@ -439,15 +482,17 @@ def run_area_structures(destination, mix_mode=None):
     if mix_mode!='baseline':
         assert fp.loc['103_both_60_1.0','accounts']==fp.loc['103_repeat_60_1.0','accounts']
     fp.to_csv(dest/'fingerprints.csv')
+    if soft: pd.DataFrame([dict(last_year=y,prior=s,region=z,n=len(v[0]),positive=int(np.isfinite(v[1]).sum()),penalty=penalty)
+            for y,h in annual.items() for z,r in h.items() for s,v in r.items()]).to_csv(dest/'fit.csv',index=False)
     old.write(dest/'inputs.json',dict(references=refs,cash_sale=cash_sale,cash_sale_n=len(sell),deflator=deflator,
-            source_sha256=old.digest(RAW),cohort_sha256=job['cohort_sha256'],unverified_rights=int(b.area_e1.isna().sum()),
+            source_sha256=old.digest(RAW),cohort_sha256=(hashlib.sha256(cohort.to_json(orient='records',force_ascii=False).encode()).hexdigest() if calibrated else job['cohort_sha256']),unverified_rights=int(b.area_e1.isna().sum()),
             positive_intensity_proxy=int(b.intensity_proxy.sum()),other_sown_gap_mu=float((b.sow_total-b.sow_food-b.sow_cash).sum())))
 
 
 if __name__ == "__main__" and __import__('sys').argv[1:2]==['crop-mix']:
     import sys
-    if len(sys.argv)!=4 or sys.argv[2] not in ('baseline','candidate','continuous'):
-        raise SystemExit('crop-mix baseline|candidate|continuous NEW_DIRECTORY')
+    if len(sys.argv)!=4 or sys.argv[2] not in ('baseline','candidate','continuous','B','Bmid','Blow','Bhigh','C','D','Dmid','Dlow','Dhigh'):
+        raise SystemExit('crop-mix baseline|candidate|continuous|B|Bmid|Blow|Bhigh|C|D|Dmid|Dlow|Dhigh NEW_DIRECTORY')
     run_area_structures(sys.argv[3],sys.argv[2])
 elif __name__ == "__main__" and __import__('sys').argv[1:2]==['area']:
     import sys

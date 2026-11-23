@@ -36,11 +36,19 @@ def continuous_farm_plan(a, land, rights, cash, rent, years_inputs, trading):
             [0,0,0,1,0,1],[1/ci,1/ci,0,0,0,0]]
     target=getattr(a,'crop_mix_target',None)
     composition={} if target is None else dict(A_eq=[[1-target,-target,0,0,0,0]],b_eq=[0])
+    penalty=getattr(a,'crop_adjustment_yuan',None)
+    if target is not None and penalty is not None:
+        if not np.isfinite(penalty) or penalty<0: raise ValueError('invalid crop adjustment cost')
+        # The historical reference is a choice cost, not a cash payment or a target equality.
+        gain=np.r_[gain,-penalty,-penalty]
+        rows=[r+[0,0] for r in rows]
+        bounds.extend([(0,None),(0,None)])
+        composition=dict(A_eq=[[1-target,-target,0,0,0,0,-1,1]],b_eq=[0])
     sol = linprog(-gain,**composition,A_ub=rows,b_ub=[land,a.family_days,max(0,cash),0,rights,a.area_limit],
                   bounds=bounds,method='highs')
     if not sol.success:
         raise ValueError(sol.message)
-    g,c,h,out,inside,eligible = np.maximum(sol.x,0)
+    g,c,h,out,inside,eligible = np.maximum(sol.x[:6],0)
     return dict(grain=g,crop=c,hired=h,offer=max(0,out-inside),demand=max(0,inside-out),
                 cultivated=(g+c)/ci,eligible=eligible,cost=g*kg+c*kc+h*wage,
                 expected=-sol.fun, land_value=max(0,-sol.ineqlin.marginals[0]),

@@ -3711,7 +3711,12 @@ class MainModel(Model):
                 u=int.from_bytes(token[:8],'big')/2**64
                 # Missing history has no estimated row: use the unconstrained old choice.
                 a.crop_mix_target=None
-                if 'continuous_crop_history' in e:
+                if 'regional_history' in e:
+                    from core.fixed_rule_runtime import continuous_crop_target
+                    a.crop_adjustment_yuan=e['actor_crop_penalty'][k] if 'actor_crop_penalty' in e else e['crop_penalty']
+                    share=g0/(g0+c0) if g0+c0>1e-7 else None
+                    a.crop_mix_target=continuous_crop_target(e['regional_history'][e['macro_region'][a.zone]],prior,share,u)
+                elif 'continuous_crop_history' in e:
                     from core.fixed_rule_runtime import continuous_crop_target
                     share=g0/(g0+c0) if g0+c0>1e-7 else None
                     a.crop_mix_target=continuous_crop_target(e['continuous_crop_history'],prior,share,u)

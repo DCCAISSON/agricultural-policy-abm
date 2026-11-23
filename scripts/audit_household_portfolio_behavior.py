@@ -708,7 +708,217 @@ def audit_crop_mix(parent):
     (out/'figures').mkdir(exist_ok=True);fig.savefig(out/'figures/behavior.png',dpi=150);plt.close(fig)
 
 
-if __name__=="__main__" and __import__('sys').argv[1:2]==['crop-mix']:
+def audit_soft_response(folder):
+    import hashlib
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from scripts.prepare_nfps_v3 import candidate_cohort,clean_area,RAW,MANIFEST
+    from scripts.run_national_household_portfolio import v1_household_inputs
+    root=Path(folder);out=root/'run_01';pr=root/'PRIVATE_DO_NOT_SHARE'
+    old=pd.DataFrame(json.loads(Path(json.loads(MANIFEST.read_bytes())['jobs'][8]['cohort']).read_bytes())['farmers'])
+    new=candidate_cohort(); prices,_,ratios,_=v1_household_inputs()
+    raw=pd.read_csv(RAW,usecols='id hhid year sow_food sow_cash sow_total sow_oother area_e area_b area_de area_de2 area_in area_in1'.split(),dtype={'id':str,'hhid':str})
+    clean_area(raw)
+    params=pd.read_csv(ROOT/'national_crop_mix_repair_20261123/run_01/parameter_provenance.csv').set_index('parameter').value
+    kg,kc,lg,lc,w,rate=[float(params[k]) for k in ['grain_other_cost_per_mu','cash_crop_other_cost_per_mu','grain_labor_days','cash_crop_labor_days','hired wage','P0']]
+    unique=raw[~raw.duplicated(['year','hhid'],keep=False)].dropna(subset=['id','hhid'])
+    ids2010=unique[unique.year.eq(2010)][['id','hhid']]
+    configs={'A':pr/'A','Bmid':pr/'B','Bhigh':pr/'Bhigh','C':pr/'equal_consumption/C',
+             **{v:pr/'equal_consumption'/f for v,f in [('Dmid','D'),('Dlow','Dlow'),('Dhigh','Dhigh')]}}
+    scores={}
+    for m in ['Dlow','Dmid','Dhigh']:
+        df=pd.read_csv(configs[m]/'behavior.csv').query("year<=2012 and not case.str.contains('repeat')",engine='python')
+        assert len(df)==4
+        scores[m]=(df.mixed_error+df.share_mae).mean()
+    chosen=min(scores,key=scores.get)
+    pd.DataFrame([dict(mode=m,loss=v,chosen=m==chosen) for m,v in scores.items()]).to_csv(out/'calibration.csv',index=False)
+    if chosen=='Dlow':configs['Blow']=pr/'Blow'
+    configs.update(Bmob=pr/'mobility/B',Dmob=pr/'mobility/D')
+    formal={'A':'A','B':'Bmob','C':'C','D':'Dmob'}
+    def hashfile(p):
+        with p.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
+    from scripts.prepare_nfps_v3 import WEIGHTS,ROOT as project
+    job=json.loads(MANIFEST.read_bytes())['jobs'][8]
+    sources=[RAW, RAW.parent/'2009-2015individual.csv', RAW.parent/'household variables2009-2015.xlsx',
+             RAW.parent/'2009-2017农户调查问卷.txt', WEIGHTS, MANIFEST, Path(job['cohort']),
+             project/'config/experiments/national_real2024_cpi_20260909.csv',
+             project/'results/national_crop_budget_basis_20261118/run_04/real2024_revision/record_selection_money2024.csv']
+    fingerprints={p.name:hashfile(p) for p in sources}
+    assert fingerprints[sources[6].name]==job['cohort_sha256']
+    spec=json.loads((configs['Dmob']/'inputs.json').read_bytes())
+    assert fingerprints[RAW.name]==spec['source_sha256'] and fingerprints[sources[-1].name]==spec['references']['budget_sha256']
+    pd.Series(fingerprints,name='sha256').rename_axis('source').to_csv(out/'source_manifest.csv')
+    provenance=pd.read_csv(ROOT/'national_crop_mix_repair_20261123/run_01/parameter_provenance.csv')
+    provenance=provenance[~provenance.parameter.isin(['conditional crop share','mixed share grid'])]
+    penalty_rows=[('reference share','conditional draw','NFPS prior status, share and region; past transitions through min(year-1,2012)','fraction'),
+                  ('adjustment anchor',pd.read_csv(configs['Dmid']/'fit.csv').penalty.iloc[0],'median of four regional differences in sale less nonlabor cost; not a measured cost','2024 yuan/sown mu'),
+                  ('adjustment multipliers','0.5,1,1.5','structural sensitivities; 2011-2012 calibration only','ratio'),
+                  ('household adjustment multiplier','1.5 - 0.5 * switch proxy','2009-2010 observed status switch, otherwise regional switch frequency; no cash outflow','ratio')]
+    provenance=pd.concat([provenance,pd.DataFrame(penalty_rows,columns=provenance.columns)])
+    provenance['basis_type']='structural assumption'
+    calculated=['grain sold fraction','cash crop revenue','intensity','available labor','adjustment anchor',
+                'grain_labor_days','cash_crop_labor_days','grain_other_cost_per_mu','cash_crop_other_cost_per_mu']
+    provenance.loc[provenance.parameter.isin(calculated)|provenance.parameter.str.endswith('_grain'),'basis_type']='calculated from source, with proxies'
+    provenance.loc[provenance.parameter.eq('reference share'),'basis_type']='empirical conditional distribution'
+    provenance.loc[provenance.parameter.eq('household adjustment multiplier'),'basis_type']='assumption with observed switch or regional proxy'
+    provenance.to_csv(out/'parameter_provenance.csv',index=False)
+    summary=[]; annual=[];receipts=[];factor=[];tables={};sens=[];fields=[];bridge=[]
+    ref=ROOT/'national_crop_mix_data_comparability_20261123/PRIVATE_DO_NOT_SHARE/v2/PRIVATE_DO_NOT_SHARE'
+    for m,path in configs.items():
+        roster=new if m.startswith(('C','D')) else old
+        ids=raw.iloc[roster.source_row.to_numpy()-2][['id','hhid']].assign(actor=roster.cohort_agent_id.to_numpy()).merge(ids2010,validate='m:1')
+        survey=unique.merge(ids,on=['id','hhid'],validate='m:1')
+        base=pd.read_csv(path/'PRIVATE_DO_NOT_SHARE/baseline.csv').set_index('actor')
+        spec=json.loads((path/'inputs.json').read_bytes())
+        if m.startswith(('C','D')):
+            assert np.allclose(base.consumption,roster.economic_basis_20261021.str['annual_reported_cash_candidate_yuan2024'])
+            assert np.allclose(base.area_e,raw.iloc[roster.source_row.to_numpy()-2].area_e)
+            # Correct the provenance-only identifier in receipts produced before this metadata fix.
+            sig=hashlib.sha256(roster.to_json(orient='records',force_ascii=False).encode()).hexdigest()
+            if spec['cohort_sha256']!=sig:
+                assert spec['cohort_sha256']==json.loads(MANIFEST.read_bytes())['jobs'][8]['cohort_sha256']
+                spec['cohort_sha256']=sig
+                (path/'inputs.json').write_text(json.dumps(spec,ensure_ascii=False,indent=2),encoding='utf8')
+        audit_area_receipts(path,'candidate')
+        private=path/'PRIVATE_DO_NOT_SHARE'
+        for f in private.glob('*.csv'):
+            if m=='A': assert hashfile(f)==hashfile(ref/f.name)
+        for suffix in ('accounts.csv','organizations.csv','government.json','contracts.csv','orders.csv'):
+            a=private/f'103_both_60_1.0_{suffix}'; repeat=private/f'103_repeat_60_1.0_{suffix}'
+            assert hashfile(a)==hashfile(repeat)
+            if m=='A':assert all(hashfile(f)==hashfile(ref/f.name) for f in private.glob('*_'+suffix))
+            receipts.append(dict(mode=m,artifact=suffix,seed=103,sha256=hashfile(a),repeat_identical=True))
+        beh=pd.read_csv(path/'behavior.csv').set_index(['case','year'])
+        for seed in (103,109):
+            case=f'{seed}_both_60_1.0'; hh=pd.read_csv(private/(case+'_accounts.csv')).query("kind=='household'").copy()
+            assert len(hh)==3000 and not hh.duplicated(['id','year']).any()
+            b=base.reindex(hh.id)
+            assert np.allclose(hh.cultivated*b.intensity.to_numpy(),hh.grain+hh.crop)
+            shocks={}
+            for y,z in set(zip(hh.year,hh.region)):
+                rng=np.random.default_rng([seed,int(y),int(z)]);u=rng.random()
+                shocks[y,z]=1-rng.uniform(.05,.10) if u<.05 else (1+rng.uniform(.0275,.055) if u<.13 else 1.)
+            assert np.allclose([shocks[y,z] for y,z in zip(hh.year,hh.region)],hh.weather_factor)
+            assert np.allclose(hh.grain_kg,hh.grain*b.region.map(prices).to_numpy()*hh.weather_factor)
+            assert np.allclose(hh.sales,(hh.grain*b.region.map(prices).to_numpy()*float(params['grain price'])*ratios['grain']+hh.crop*spec['cash_sale'])*hh.weather_factor)
+            assert np.allclose(hh.input_hire_cost,hh.grain*kg+hh.crop*kc+hh.hired_days*w)
+            assert np.allclose(hh.family_used+hh.hired_days,hh.grain*lg+hh.crop*lc)
+            assert (hh.input_hire_cost<=hh.preplant_funds+1e-5).all() and (hh.family_used<=hh.family_capacity+1e-6).all()
+            assert np.allclose(hh.claim,rate*np.minimum(hh.rights-hh.rented_out,hh.cultivated)) and np.allclose(hh.closing,hh.opening+hh.net-hh.consumption)
+            assert hashfile(private/(case+'_organizations.csv'))==hashfile(ref/(case+'_organizations.csv'))
+            hh['share']=hh.grain/(hh.grain+hh.crop).where(hh.grain+hh.crop>1e-7)
+            tables[m,seed]=hh.set_index(['year','id']).sort_index()
+            label=next((k for k,v in formal.items() if v==m),'sensitivity')
+            prev=survey[survey.year.eq(2010)].set_index('actor')
+            prev=pd.DataFrame(dict(obs=prev.sow_food/(prev.sow_food+prev.sow_cash).replace(0,np.nan)))
+            prev['sim']=prev.obs
+            for y,z in hh.groupby('year'):
+                t=survey[survey.year.eq(y)].merge(z.rename(columns={'id':'actor'}),on='actor',validate='1:1').set_index('actor')
+                t=t.dropna(subset=['sow_food','sow_cash'])
+                ob=t.sow_food/(t.sow_food+t.sow_cash).replace(0,np.nan);cur=pd.DataFrame(dict(obs=ob,sim=t.share))
+                joint=cur.join(prev,lsuffix='1',rsuffix='0',how='inner').dropna(); prev=cur
+                diff=abs((joint.obs1-joint.obs0).abs().mean()-(joint.sim1-joint.sim0).abs().mean())
+                r=beh.loc[case,y].to_dict(); assert len(t)==r['matched']
+                known=t[['area_b','area_e','area_in','area_de','area_de2']].ge(0).all(axis=1)&(t.area_b+t.area_in-t.area_de-t.area_e).abs().lt(1e-4)&t.area_b.gt(0)&t.area_in.eq(0)&t.area_de2.le(t.area_de)
+                summary.append(dict(mode=m,model=label,seed=seed,year=y,**r,adjustment_n=len(joint),adjustment_error=diff,
+                    pass_three=bool(r['passed'] and diff<=.15),survey_grain_only=(t.sow_food.gt(0)&t.sow_cash.eq(0)).sum(),
+                    survey_cash_only=(t.sow_cash.gt(0)&t.sow_food.eq(0)).sum(),sim_grain_only=(t.grain.gt(1e-7)&t.crop.le(1e-7)).sum(),
+                    sim_cash_only=(t.crop.gt(1e-7)&t.grain.le(1e-7)).sum(),survey_other_only=(ob.isna()&t.sow_oother.gt(0)).sum(),
+                    survey_all_planted=t.sow_total.gt(0).sum(),survey_all_observed=t.sow_total.count(),survey_other_mu=t.sow_oother.sum(),
+                    survey_all_sown_intensity=(t.sow_total/t.area_e.where(t.area_e.gt(0))).median(),survey_all_sown_mu=t.sow_total.sum(),
+                    survey_cash_mu=t.sow_cash.sum(),sim_cash_mu=t.crop.sum(),family_used=t.family_used.sum(),hired_days=t.hired_days.sum(),
+                    net_income=t.net.sum(),model_two_crop_idle=t.cultivated.le(1e-7).sum(),survey_operated_to_zero=(t.area_b.gt(0)&t.area_e.eq(0)).sum(),
+                    survey_area_de_observed=t.area_de.count(),survey_area_de_reported_mu=t.area_de.sum(min_count=1),
+                    survey_known_begin_end=(t.area_b.notna()&t.area_e.notna()).sum(),full_leases_identifiable=known.sum(),
+                    full_leases_observed=(known&t.area_e.eq(0)&(t.area_b-t.area_de2).abs().lt(1e-4)).sum(),
+                    survey_operated_q25=t.area_e.quantile(.25),survey_operated_q75=t.area_e.quantile(.75),
+                    sim_operated_q25=t.operated.quantile(.25),sim_operated_q75=t.operated.quantile(.75)))
+                planted=z.share.notna()&z.target_share.notna()
+                sens.append(dict(mode=m,model=label,seed=seed,year=y,positive_with_history=planted.sum(),
+                       above=(z.share[planted]>z.target_share[planted]+1e-7).sum(),below=(z.share[planted]<z.target_share[planted]-1e-7).sum(),
+                       reference_median=z.target_share[planted].median(),realized_median=z.share[planted].median(),
+                       pure_cash_below_reference=((z.share<1e-7)&(z.target_share>1e-7)).sum()))
+        annual.append(pd.read_csv(path/'structures.csv').query("not case.str.contains('repeat')",engine='python').assign(mode=m,model=label))
+        if (path/'fit.csv').exists():fields.append(pd.read_csv(path/'fit.csv').assign(mode=m))
+    for seed in (103,109):
+        for y in range(2011,2016):
+            gs={k:tables[v,seed].loc[y] for k,v in formal.items()}
+            for metric in ['grain','grain_kg','crop','net','rented_in','hired_days','paid']:
+                a,b,c,d=[gs[k][metric].sum() for k in 'ABCD']
+                factor.append(dict(seed=seed,year=y,metric=metric,A=a,B=b,C=c,D=d,rule=b-a,cohort=c-a,interaction=d-b-c+a,total=d-a))
+            for left,right in [('A','B'),('C','D')]:
+                a,b=gs[left],gs[right];sa=a.grain+a.crop;sb=b.grain+b.crop;both=sa.gt(1e-7)&sb.gt(1e-7)
+                fa=a.share[both];fb=b.share[both]
+                entry=b.grain[~both].sum()-a.grain[~both].sum();mix=((fb-fa)*(sb[both]+sa[both])/2).sum();size=((fb+fa)*(sb[both]-sa[both])/2).sum()
+                assert np.isclose(b.grain.sum()-a.grain.sum(),entry+mix+size)
+                bridge.append(dict(seed=seed,year=y,comparison=right+'-'+left,entry_exit=entry,within_share=mix,sown_scale=size,grain_change=entry+mix+size))
+    # Hold actual leases, cash, labor, weather and the reference fixed; do not run a policy counterfactual.
+    from core.fixed_rule_runtime import continuous_farm_plan,crop_history_group,continuous_crop_target
+    from scripts.run_national_household_portfolio import estimate_crop_transitions
+    from types import SimpleNamespace
+    loc=configs[formal['D']];base=pd.read_csv(loc/'PRIVATE_DO_NOT_SHARE/baseline.csv').set_index('actor')
+    mobility=pd.read_csv(loc/'PRIVATE_DO_NOT_SHARE/historical_mobility.csv').set_index('actor')
+    assert len(mobility)==600 and mobility.index.is_unique
+    mobility.assign(group=np.where(mobility.observed,np.where(mobility.switch_proxy.eq(1),'changed','stable'),'regional_proxy')).groupby('group').penalty.agg(['count','min','mean','max']).to_csv(out/'adjustment_costs.csv')
+    rev=json.loads((loc/'inputs.json').read_bytes())['cash_sale']
+    response=[];roll=[]
+    pd_high=float(pd.read_csv(configs[chosen]/'fit.csv').penalty.iloc[0])
+    cohorts=set(raw.iloc[np.r_[new.source_row,old.source_row]-2].hhid.dropna())
+    from core.extract_microdata_features import REGION_MAPPING
+    geo={p:z for z,ps in REGION_MAPPING.items() for p in ps}
+    donors=pd.concat([estimate_crop_transitions(RAW,cohorts,True,y,True) for y in (2010,2011,2012)])
+    histories={(z,k):(g.prior_share.to_numpy(),g.share.to_numpy()) for (z,k),g in donors.groupby([donors.smgen.map(geo),'prior'])}
+    keys=raw.iloc[new.source_row.to_numpy()-2][['id','hhid']].assign(actor=new.cohort_agent_id.to_numpy()).merge(ids2010,validate='m:1')
+    s=unique.merge(keys,on=['id','hhid'],validate='m:1').set_index(['year','actor']).sort_index()
+    for seed in (103,109):
+        for y in (2013,2014,2015):
+            frame=tables[formal['D'],seed].loc[y]
+            z=s.loc[y].join(s.loc[y-1][['sow_food','sow_cash']],rsuffix='_prior',how='inner').join(frame[['choice_u','target_share']]).dropna(subset=['sow_food','sow_cash','sow_food_prior','sow_cash_prior','target_share'])
+            z=z[z.sow_food+z.sow_cash>0]
+            pred=[]
+            for i,r in z.iterrows():
+                g,c=r.sow_food_prior,r.sow_cash_prior
+                k=crop_history_group(g,c);k='mixed' if k.startswith('mixed') else k
+                h=histories.get((base.at[i,'region'],k))
+                pred.append(continuous_crop_target({k:h},k,g/(g+c) if g+c else None,r.choice_u) if h else np.nan)
+            actual=z.sow_food/(z.sow_food+z.sow_cash); keep=np.isfinite(pred)
+            for kind,point in [('actual_lag',np.asarray(pred)),('simulated_lag',z.target_share.to_numpy())]:
+                roll.append(dict(seed=seed,year=y,train_end=2012,history=kind,n=keep.sum(),target_mae=np.mean(abs(point[keep]-actual[keep])),
+                                 quartile_mae=np.abs(np.quantile(point[keep],[.25,.5,.75])-actual[keep].quantile([.25,.5,.75])).mean()))
+        for mode in [chosen,formal['D']]:
+            z=tables[mode,seed].loc[2015]; changes=[]
+            for r in z.itertuples():
+                k=mobility.at[r.Index,'penalty'] if mode==formal['D'] else pd_high
+                b=base.loc[r.Index]; actor=SimpleNamespace(sowing_intensity=b.intensity,area_limit=b.region_land,
+                    family_days=r.family_capacity,crop_adjustment_yuan=k,crop_mix_target=r.target_share if pd.notna(r.target_share) else None)
+                income=prices[b.region]*float(params['grain price'])*ratios['grain']
+                outcomes=[continuous_farm_plan(actor,r.operated,r.rights-r.rented_out,r.preplant_funds,0.,
+                    (income*pg,rev*pc,kg,kc,lg,lc,w,rate),False) for pg,pc in [(1,1),(1.1,1),(1,1.1)]]
+                assert np.isclose(outcomes[0]['grain'],r.grain) and np.isclose(outcomes[0]['crop'],r.crop)
+                changes.append([p['grain'] for p in outcomes])
+            a,b,c=np.array(changes).T
+            response.append(dict(mode=mode,seed=seed,year=2015,families=len(a),grain_price_up_more_grain=(b>a+1e-7).sum(),grain_price_up_delta_mu=(b-a).sum(),
+                                 cash_sale_up_less_grain=(c<a-1e-7).sum(),cash_sale_up_delta_mu=(c-a).sum()))
+    pd.DataFrame(roll).to_csv(out/'one_step_history.csv',index=False)
+    pd.DataFrame(response).to_csv(out/'conditional_price_response.csv',index=False)
+    for name,rows in [('household_behavior',summary),('factorial',factor),('target_response',sens),('repeat_receipts',receipts),('grain_bridge',bridge)]:
+        pd.DataFrame(rows).to_csv(out/(name+'.csv'),index=False)
+    pd.concat(annual).to_csv(out/'production_and_land.csv',index=False)
+    pd.concat(fields).to_csv(out/'fitted_reference.csv',index=False)
+    fig,axes=plt.subplots(1,2,figsize=(10,3.7));df=pd.DataFrame(summary).query("model!='sensitivity'")
+    for tag,g in df.groupby('model'):
+        g=g.groupby('year')[['share_mae','sim_grain','survey_grain']].mean()
+        axes[0].plot(g.index,g.share_mae,marker='o',label=tag)
+        axes[1].plot(g.index,g.sim_grain-g.survey_grain,marker='o',label=tag)
+    for ax,label,ref in zip(axes,['Grain-share quartile MAE','Grain area minus matched survey (mu)'],[.15,0]):
+        ax.axhline(ref,linestyle=':',color='black');ax.set(ylabel=label,xticks=range(2011,2016));ax.legend()
+    fig.tight_layout();fig.savefig(out/'factorial.png',dpi=160);plt.close(fig)
+
+
+if __name__=="__main__" and __import__('sys').argv[1:2]==['soft-response']:
+    import sys
+    audit_soft_response(sys.argv[2])
+elif __name__=="__main__" and __import__('sys').argv[1:2]==['crop-mix']:
     import sys
     audit_crop_mix(sys.argv[2])
 elif __name__=="__main__" and __import__('sys').argv[1:2]==['area']:

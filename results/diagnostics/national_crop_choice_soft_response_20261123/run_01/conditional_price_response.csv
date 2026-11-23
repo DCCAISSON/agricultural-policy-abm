@@ -1,0 +1,5 @@
+mode,seed,year,families,grain_price_up_more_grain,grain_price_up_delta_mu,cash_sale_up_less_grain,cash_sale_up_delta_mu
+Dhigh,103,2015,600,0,-1.7763568394002505e-15,0,0.0
+Dmob,103,2015,600,10,27.811547794187742,15,-75.55920241522334
+Dhigh,109,2015,600,0,-4.39648317751562e-14,0,0.0
+Dmob,109,2015,600,3,4.9486776491396505,18,-95.54885373970188

@@ -1,0 +1,4 @@
+mode,loss,chosen
+Dlow,0.8866187747337212,False
+Dmid,0.49271226751893143,False
+Dhigh,0.02896001185376345,True
