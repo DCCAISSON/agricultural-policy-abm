@@ -162,7 +162,9 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
         participation = expit(p+incentive*np.max(best,axis=1)/np.maximum(1.,full)/fit['return_scale'])
     else:
         participation = np.ones(len(idx))
-    chosen = total[i,idx] * (u[:,0]<participation)
+    # V4.1 keeps economic exit (zero is already a candidate). For a landless
+    # household, pre-trade area is only a bid; post-trade area requires an actual lease.
+    chosen = total[i,idx] if flags.get('economic_participation') else total[i,idx]*(u[:,0]<participation)
     g, c = chosen*shares[i,idx], chosen*(1.-shares[i,idx])
     phys=chosen/intensity
     ask=np.maximum(0.,(sales[i,idx]-material[i,idx]-

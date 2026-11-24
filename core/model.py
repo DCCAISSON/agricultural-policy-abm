@@ -3827,7 +3827,13 @@ class MainModel(Model):
                 rows[k].update(**mix,planned_grain=plan['grain'],planned_crop=plan['crop'],
                                labor_shadow=plan['labor_shadow'],land_shadow=plan['land_value'])
         if v4 and 'v4_space' in e:
-            deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'],space=e['v4_space'])
+            external=e.get('scale_pool')
+            if external is not None:
+                external={z:dict(p,reference_rent=e['rents'][z]) for z,p in external.items()}
+                deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'],space=e['v4_space'],
+                        external=external,household_ids=set(ids))
+            else:
+                deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'],space=e['v4_space'])
         else:
             deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'])
         leases.extend(deals)
@@ -3905,6 +3911,26 @@ class MainModel(Model):
                 idle=max(0.,land-p['cultivated']),grain_kg=qty,sales=sales,input_hire_cost=p['cost'],
                 hired_days=p['hired'],overhead=overhead,nonfarm=a.wage_income,claim=claims[k])
         paid=self.government.settle_area_support(sar,claims,{a.unique_id:a.zone for a in actors})
+        self.area_external_last=[]
+        if 'scale_pool' in e:
+            for z,pool in sorted(e['scale_pool'].items()):
+                out,ins,income,rent=final[f'_area_pool_{z}']
+                assert out<=pool['supply']+1e-7 and ins<=pool['demand']+1e-7
+                left=pool['supply']-out
+                held=left+ins
+                m=pool['intensity']
+                share=pool['share']
+                grain,crop=held*m*share,held*m*(1.-share)
+                gy=pool['grain_yield']
+                g_price=inputs[z][0]/e['yields'][z]
+                sales=(grain*gy*g_price+crop*inputs[z][1])*weather[z]
+                cost=grain*pool['grain_cost']+crop*inputs[z][3]
+                self.area_external_last.append(dict(year=year,region=z,opening_area=pool['supply'],
+                    demand_capacity=pool['demand'],rented_in=ins,rented_out=out,operated=held,retained=left,
+                    grain=grain,crop=crop,grain_kg=grain*gy*weather[z],crop_kg=crop*e['cash_yield']*weather[z],
+                    acquired_grain_kg=ins*m*share*gy*weather[z],released_grain_kg=out*m*share*gy*weather[z],
+                    rent_paid=rent,rent_received=income,sales=sales,cost=cost,net=sales-cost+income-rent,paid=0.,
+                    reference_rent=external[z]['reference_rent'],weather_factor=weather[z]))
         state={}
         for a in actors:
             r=rows[a.unique_id]

@@ -1,0 +1,13 @@
+parameter,unit,source,method,active_scope
+external_offer_capacity,physical mu,NFPS area_de2;NH2-10,lagged noncohort measured area divided by eligible exposure times local fixed-cohort exposure by province and initial size;macro fallback below 30,R1/R3 household residual bids
+external_demand_capacity,physical mu,NFPS area_in1;NH2-7,same lagged exposure construction as supply;never substitutes missing individual flow,R1/R3 household residual asks
+external_rent,2024 CNY/physical mu,existing regional land market,internal uniform rent or previous reference rent without external premium,R1/R3
+external_grain_share,fraction,NFPS sow_food and sow_cash,median valid noncohort grain share on both reported crop areas,R1/R3 separate production account
+external_sowing_intensity,sown mu/physical mu,NFPS sow_food sow_cash and area_e,median positive noncohort grain plus cash sown area per reported positive operated mu,R1/R3 separate production account
+external_grain_yield,kg/sown mu,NFPS prod_food and sow_food,median valid lagged noncohort unit yield times existing year and zone weather,R1/R3 separate production account
+external_grain_cost,2024 CNY/sown mu,NFPS grain crop seed fertilizer pesticide machine irrigation and hired labor costs,noncohort median valid complete expenditure sums over corresponding grain area deflated to 2024,R1/R3 separate production account
+external_cash_return_and_cost,2024 CNY/sown mu,parent representative cash crop budget,frozen sale and nonlabor costs;not a separately estimated external cash-crop budget,R1/R3 separate production account
+external_management_or_member_income,CNY,structural assumption,no separate labor behavior member or profit distribution in pool,R1/R3
+household_participation,physical mu,existing vectorized feasible area and crop choice,retain zero area and resource constraints;remove only the ex-post unconditional participation draw,R2/R3
+household_sowing_intensity,sown mu/physical mu,parent 2010 household value,unchanged;R4 not run,M0/R0/R1/R2/R3
+support_and_eligibility,2024 CNY/eligible mu,parent fixed support 83,existing household and organization rules;no external claim or policy training,all

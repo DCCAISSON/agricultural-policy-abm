@@ -131,3 +131,46 @@ def test_ablation_records_positive_plan_rejected_by_stay_random_draw():
     a=farm_batch(s,f,u,stage=1,diagnostic={'stay':True,'trace':True},incentive=0.)
     assert (a['stay_u']>a['stay_probability']).all()
     assert (a['plan_sown']>0).all() and not a['cultivated'].any()
+
+
+def test_scale_shapley_closes_and_reverses_with_single_sided_cultivation():
+    from scripts.audit_household_portfolio_behavior import area_shapley
+    a=np.array([[8.,10.,2.],[0.,5.,2.],[0.,5.,2.]])
+    b=np.array([[10.,8.,0.],[5.,8.,0.],[5.,8.,0.]])
+    d=area_shapley(a,b)
+    np.testing.assert_allclose(d.sum(axis=0),[5.,3.,-2.])
+    np.testing.assert_allclose(d,-area_shapley(b,a))
+    assert not d[2:,[0,2]].any()
+
+
+def test_scale_pool_matches_only_household_residuals_at_regional_rent():
+    actors=[SimpleNamespace(unique_id=k,zone=4,area_kind='household',
+                             base_area=5.,lease_right=5.) for k in ('s','b','x','y')]
+    space=area_moore_neighbors(actors)
+    space['search']=False
+    orders=[dict(id=k,side=side,quantity=q,price=p,region=4) for k,side,q,p in
+            [('s','sell',5,60),('b','buy',1,140),('x','buy',1,90),('y','buy',4,50)]]
+    old=LandClearingHouse.clear_area_orders(orders,2015,1,space=space)
+    pool={4:dict(supply=3.,demand=2.,reference_rent=88.)}
+    d=LandClearingHouse.clear_area_orders(orders,2015,1,space=space,external=pool,household_ids={'s','b','y'})
+    assert d[:len(old)]==old
+    assert len(d)==len(old)+1
+    outside=d[-1]
+    assert (outside['channel'],outside['area'],outside['rent'])==('external_demand',2.,old[0]['rent'])
+    assert outside['slice_start']==sum(row['area'] for row in old)
+    orders=[dict(id=k,side='buy',quantity=2,price=130,region=4) for k in ('b','org')]
+    d=LandClearingHouse.clear_area_orders(orders,2015,1,space=space,external=pool,household_ids={'b'})
+    assert len(d)==1 and d[0]['buyer']=='b' and d[0]['plot'] is None and d[0]['rent']==88.
+
+
+def test_scale_participation_retains_zero_area_and_resource_constraints():
+    s,f,u=fixture()
+    f['stay'][1,0]=-10.
+    s['funds']=[300.,0.]
+    u[:,0]=.99
+    flags={'stay':True,'trace':True}
+    a=farm_batch(s,f,u,stage=1,diagnostic=flags,incentive=0.)
+    b=farm_batch(s,f,u,stage=1,diagnostic=flags|{'economic_participation':True},incentive=0.)
+    assert not a['cultivated'].any() and b['cultivated'][0]>0 and b['cultivated'][1]==0
+    np.testing.assert_array_equal(a['stay_probability'],b['stay_probability'])
+    assert (b['cost']<=s['funds']).all()

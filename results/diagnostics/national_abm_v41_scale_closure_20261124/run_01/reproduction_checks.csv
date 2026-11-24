@@ -1,0 +1,5 @@
+spec,seed,check
+R0/R1/R2/R3,all,initial household states byte-identical
+R0_diag,103/109/103 repeat,all private ledgers equal to frozen parent
+R0,103,all key ledgers byte-identical on repeat
+R3,103,all key ledgers byte-identical on repeat

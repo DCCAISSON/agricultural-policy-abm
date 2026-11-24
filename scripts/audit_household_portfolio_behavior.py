@@ -1482,7 +1482,228 @@ def audit_v4_behavior_repair(destination, final=False):
             shutil.copyfile(work/'repair'/name,out/name)
 
 
-if __name__=="__main__" and __import__('sys').argv[1:2]==['audit-v4-repair']:
+def area_shapley(start, end):
+    """Survey minus model; share and intensity at an inactive endpoint are unidentified."""
+    from itertools import permutations
+    import numpy as np
+    def factors(v):
+        a,g,c=v
+        s=g+c
+        active=s>1e-7
+        assert np.all(a[active]>0) and np.all(a>=-1e-8)
+        a=np.maximum(a,0.)
+        return np.array([active,a,np.divide(s,a,out=np.zeros_like(a),where=active),
+                         np.divide(g,s,out=np.zeros_like(s),where=active)])
+    a,b=factors(start),factors(end)
+    # For single-sided cultivation, borrow the active endpoint composition and intensity.
+    # This leaves entry/exit and physical area distinct without inventing composition changes.
+    a[2:,a[0]==0]=b[2:,a[0]==0]
+    b[2:,b[0]==0]=a[2:,b[0]==0]
+    out=np.zeros_like(a)
+    for order in permutations(range(4)):
+        state=a.copy()
+        for j in order:
+            before=state.prod(axis=0)
+            state[j]=b[j]
+            out[j]+=(state.prod(axis=0)-before)/24.
+    np.testing.assert_allclose(out.sum(axis=0),end[1]-start[1],atol=1e-7,rtol=1e-10)
+    return out
+
+
+def audit_v41(destination, *, final=False):
+    import numpy as np
+    from scipy.stats import t
+    from scripts.prepare_nfps_v3 import RAW, candidate_cohort, prepare_scale_inputs
+    folder=Path(destination);out=folder/'run_01';private=folder/'PRIVATE_DO_NOT_SHARE'
+    cohort=candidate_cohort()
+    survey,pool,profiles,caps=prepare_scale_inputs(cohort)
+    assert caps.source_end.lt(caps.year).all()
+    assert caps.reports.le(caps.exposures).all()
+    np.testing.assert_allclose(caps.capacity_mu,caps.reported_mu/caps.exposures*caps.cohort_exposure)
+    profiles.to_csv(out/'pool_profiles.csv',index=False)
+    caps.to_csv(out/'pool_capacity_sources.csv',index=False)
+    surveys=[]; audit=[]; behavior=[]; decomposition=[]; agreements=[]; effects=[]
+    digest=sha256(cohort.to_json(orient='records',force_ascii=False).encode()).hexdigest()
+    predecessor=ROOT/'national_abm_v4_behavior_repair_20261124/PRIVATE_DO_NOT_SHARE/repair'
+    parent_receipt=pd.read_csv(predecessor.parent.parent/'run_01/source_receipt.csv').iloc[0]
+    assert digest==parent_receipt.cohort_sha256
+    source_sha=sha256(RAW.read_bytes()).hexdigest()
+    assert source_sha==parent_receipt.nfps_household_sha256
+    for y,d in survey[survey.year.between(2011,2015)].groupby('year'):
+        a=d.area_in1.where(d.area_in1.ge(0));b=d.area_de2.where(d.area_de2.ge(0))
+        together=a.notna()&b.notna()
+        stock=d.area_b.ge(0)&d.area_e.ge(0)
+        identity=stock&d.area_in.ge(0)&d.area_de.ge(0)
+        surveys.append(dict(year=y,n=len(d),in_n=a.count(),out_n=b.count(),in_reported=a.sum(min_count=1),out_reported=b.sum(min_count=1),
+            difference_of_separate_reports=a.sum()-b.sum(),joint_n=together.sum(),joint_net=(a[together]-b[together]).sum(),
+            stock_n=stock.sum(),stock_change=(d.loc[stock,'area_e']-d.loc[stock,'area_b']).sum(),
+            stock_identity_n=identity.sum(),stock_identity_pass=((d.area_b+d.area_in-d.area_de-d.area_e).abs().lt(1e-6)&identity).sum(),
+            share_identity_n=d[['sow_food','sow_cash','sow_oother','sow_total']].notna().all(axis=1).sum(),
+            share_identity_pass=(d.sow_food+d.sow_cash+d.sow_oother-d.sow_total).abs().lt(.005).sum()))
+    pd.DataFrame(surveys).to_csv(out/'survey_land_coverage.csv',index=False)
+    pd.DataFrame([dict(cohort_sha256=digest,source_rows=cohort.source_row.nunique(),
+        authorized_nfps_sha256=source_sha,households=cohort.cohort_agent_id.nunique())]).to_csv(out/'source_receipt.csv',index=False)
+    cases=[('R0',predecessor)]
+    if final:
+        cases=[(k,private/(k+'_diag')) for k in ('M0','R0','R1','R2','R3')]
+        cases += [(k,private/f'{k}_{seed}') for k in ('M0','R0','R3') for seed in range(301,321,5)]
+        initial=(private/'R0_diag/PRIVATE_DO_NOT_SHARE/baseline.csv').read_bytes()
+        for tag,path in cases:
+            if tag!='M0':
+                assert (path/'PRIVATE_DO_NOT_SHARE/baseline.csv').read_bytes()==initial
+        agreements.append(dict(spec='R0/R1/R2/R3',seed='all',check='initial household states byte-identical'))
+        old=predecessor/'PRIVATE_DO_NOT_SHARE'
+        if old.is_dir():
+            files=list((private/'R0_diag/PRIVATE_DO_NOT_SHARE').glob('*.*'))
+            assert files and all((old/f.name).is_file() for f in files)
+            for f in files:
+                assert sha256(f.read_bytes()).digest()==sha256((old/f.name).read_bytes()).digest(),f.name
+            agreements.append(dict(spec='R0_diag',seed='103/109/103 repeat',check='all private ledgers equal to frozen parent'))
+    for tag,path in cases:
+        assert json.loads((path/'inputs.json').read_bytes())['cohort_sha256']==digest
+        led=path/'PRIVATE_DO_NOT_SHARE'
+        baseline=pd.read_csv(led/'baseline.csv').set_index('actor')
+        for file in sorted(led.glob('*_both_*_accounts.csv')):
+            seed=int(file.name.split('_')[0])
+            r=pd.read_csv(file)
+            assert not r.duplicated(['year','id']).any() and set(r.year)==set(range(2011,2016))
+            contracts=pd.read_csv(led/file.name.replace('_accounts','_contracts'))
+            gov=json.loads((led/file.name.replace('_accounts.csv','_government.json')).read_bytes())
+            ex=led/file.name.replace('_accounts','_external')
+            external=pd.read_csv(ex) if ex.exists() else None
+            check=led/file.name.replace('_both_','_repeat_')
+            if check.exists():
+                for name in ('accounts.csv','orders.csv','contracts.csv','organizations.csv','government.json',*(['external.csv'] if ex.exists() else [])):
+                    assert (led/file.name.replace('accounts.csv',name)).read_bytes()==(led/check.name.replace('accounts.csv',name)).read_bytes()
+                agreements.append(dict(spec=tag,seed=seed,check='all key ledgers byte-identical on repeat'))
+            for y,rows in r.groupby('year'):
+                h=rows[rows.kind.eq('household')].set_index('id')
+                org=rows[~rows.kind.eq('household')]
+                assert len(h)==600 and len(org)==60
+                lhs=h.grain+h.crop
+                assert np.allclose(lhs,h.cultivated*baseline.intensity.reindex(h.index))
+                assert (rows.operated>=-1e-7).all() and (rows.cultivated<=rows.operated+1e-7).all()
+                assert (rows.rented_out<=rows.rights+1e-7).all()
+                assert np.allclose(rows.claim,83*np.minimum(rows.rights-rows.rented_out,rows.cultivated))
+                active=rows[rows.preplant_funds.notna()]
+                assert (active.input_hire_cost<=active.preplant_funds+1e-5).all()
+                residual=(rows.closing-rows.opening-rows.net+rows.consumption).abs().max()
+                sar=gov[y-2011]; assert residual<1e-6 and not sar['training']
+                assert rows.paid.sum()<=sar['annual_budget']+1e-6
+                assert (rows.grain_kg>=0.).all() and rows.loc[rows.grain.le(1e-10),'grain_kg'].le(1e-7).all()
+                weather={}
+                for z,group in h.groupby('region'):
+                    rng=np.random.default_rng([seed,int(y),int(z)]);u=rng.random()
+                    shock=(1-rng.uniform(.05,.10) if u<.05 else 1+rng.uniform(.0275,.055) if u<.13 else 1.)
+                    assert np.allclose(group.weather_factor,shock)
+                    weather[z]=shock
+                c=contracts[contracts.start.eq(y)].copy()
+                assert np.allclose(c.end,y)
+                assert (c.ask<=c.rent+1e-7).all() and (c.bid>=c.rent-1e-7).all()
+                assert c.groupby('region').rent.apply(lambda s:s.max()-s.min()).le(1e-7).all()
+                if 'plot' in c:
+                    slices=c.loc[c['plot'].notna()].sort_values(['plot','slice_start'])
+                    prev=slices.groupby('plot').slice_end.shift().fillna(0.)
+                    assert (slices.slice_start>=prev-1e-7).all()
+                    assert np.allclose(slices.slice_end-slices.slice_start,slices.area)
+                    assert (slices.slice_end<=slices.seller.map(rows.set_index('id').rights)+1e-7).all()
+                e=external[external.year.eq(y)] if external is not None else pd.DataFrame()
+                summary={}
+                if len(e):
+                    assert (e.rented_out<=e.opening_area+1e-7).all() and (e.rented_in<=e.demand_capacity+1e-7).all()
+                    assert np.allclose(e.operated,e.opening_area+e.rented_in-e.rented_out)
+                    assert np.allclose(e.net,e.sales-e.cost+e.rent_received-e.rent_paid) and e.paid.eq(0).all()
+                    assert np.allclose(e.weather_factor,e.region.map(weather))
+                    yy=profiles[profiles.year.eq(y)].set_index('region')
+                    e0=e.set_index('region')
+                    reported=yy.grain_yield.reindex(e0.index)
+                    ok=reported.notna()
+                    assert np.allclose(e0.loc[ok,'grain_kg'],(e0.grain*reported*e0.weather_factor)[ok])
+                    assert np.allclose(e0.grain+e0.crop,e0.operated*yy.intensity.reindex(e0.index))
+                    potential=yy.intensity.reindex(e0.index)*yy.share.reindex(e0.index)*reported*e0.weather_factor
+                    assert np.allclose(e0.loc[ok,'acquired_grain_kg'],(e0.rented_in*potential)[ok])
+                    assert np.allclose(e0.loc[ok,'released_grain_kg'],(e0.rented_out*potential)[ok])
+                    channel=c.channel.fillna('internal') if 'channel' in c else pd.Series('internal',index=c.index)
+                    assert np.isclose(c.loc[channel.eq('external_supply'),'area'].sum(),e.rented_out.sum())
+                    assert np.isclose(c.loc[channel.eq('external_demand'),'area'].sum(),e.rented_in.sum())
+                    assert c.loc[channel.eq('external_supply'),'plot'].isna().all()
+                    summary={k:float(e[k].sum()) for k in ('opening_area','demand_capacity','rented_in','rented_out','operated','grain_kg',
+                             'acquired_grain_kg','released_grain_kg','rent_paid','rent_received','sales','cost','net')}
+                el=lambda k:summary.get(k,0.)
+                landerr=rows.operated.sum()+el('operated')-rows.base_area.sum()-el('opening_area')
+                flowerr=rows.rented_in.sum()+el('rented_in')-rows.rented_out.sum()-el('rented_out')
+                renterr=rows.rent_paid.sum()+el('rent_paid')-rows.rent_received.sum()-el('rent_received')
+                assert max(abs(landerr),abs(flowerr),abs(renterr))<1e-6
+                for region,rz in rows.groupby('region'):
+                    ez=e[e.region.eq(region)] if len(e) else pd.DataFrame()
+                    for a,b in [('rented_in','rented_out'),('rent_paid','rent_received'),('operated','base_area')]:
+                        counterpart=b if b!='base_area' else 'opening_area'
+                        outer=ez[a].sum()-ez[counterpart].sum() if len(ez) else 0.
+                        assert abs(rz[a].sum()-rz[b].sum()+outer)<1e-6
+                audit.append(dict(spec=tag,seed=seed,year=y,land_error=landerr,flow_error=flowerr,rent_error=renterr,cash_error=residual,
+                    households_kg=h.grain_kg.sum(),organizations_kg=org.grain_kg.sum(),organizations_area=org.operated.sum(),
+                    household_net=h.net.sum(),household_area=h.operated.sum(),household_in=h.rented_in.sum(),household_out=h.rented_out.sum(),
+                    household_net_in=h.rented_in.sum()-h.rented_out.sum(),paid=rows.paid.sum(),
+                    **{'external_'+k:v for k,v in summary.items()}))
+                src=survey[survey.year.eq(y)].rename(columns={'id':'survey_key'}).set_index('actor')
+                z=src.join(h,rsuffix='_model',how='inner')
+                z=z[z.sow_food.ge(0)&z.sow_cash.ge(0)]
+                G,C=z.sow_food,z.sow_cash;g,crop=z.grain,z.crop
+                D=G+C>1e-7;d=g+crop>1e-7
+                sm=G.gt(1e-7)&C.gt(1e-7); mm=g.gt(1e-7)&crop.gt(1e-7)
+                sq=(G/(G+C).where(D)).quantile([.25,.5,.75]);mq=(g/(g+crop).where(d)).quantile([.25,.5,.75])
+                ma=(mq-sq).abs().mean();ae=abs(g.sum()/G.sum()-1)
+                pe=abs(D.mean()-d.mean());me=abs(sm.mean()-mm.mean())
+                stocks=z.area_b.ge(0)&z.area_e.ge(0)
+                volume=z.prod_food.ge(0)
+                rights=z.area_b1.ge(0)
+                behavior.append(dict(spec=tag,seed=seed,year=y,n=len(z),obs_active=D.sum(),sim_active=d.sum(),
+                    obs_mixed=sm.sum(),sim_mixed=mm.sum(),obs_pure_g=(D&G.gt(1e-7)&~sm).sum(),obs_pure_c=(D&C.gt(1e-7)&~sm).sum(),
+                    sim_pure_g=(d&g.gt(1e-7)&~mm).sum(),sim_pure_c=(d&crop.gt(1e-7)&~mm).sum(),
+                    obs_other_only=(~D&z.sow_oother.gt(0)).sum(),sim_other_only=np.nan,
+                    obs_grain=G.sum(),sim_grain=g.sum(),obs_cash=C.sum(),sim_cash=crop.sum(),
+                    **{f'obs_p{key}':v for key,v in zip((25,50,75),sq)},**{f'sim_p{key}':v for key,v in zip((25,50,75),mq)},
+                    stocks_n=stocks.sum(),obs_open_area=z.loc[stocks,'area_b'].sum(),obs_close_area=z.loc[stocks,'area_e'].sum(),
+                    sim_open_area=z.loc[stocks,'base_area'].sum(),sim_close_area=z.loc[stocks,'operated'].sum(),
+                    rights_n=rights.sum(),obs_open_rights=z.loc[rights,'area_b1'].sum(),sim_open_rights=z.loc[rights,'rights'].sum(),
+                    in_reports=z.area_in1.count(),out_reports=z.area_de2.count(),
+                    survey_in=z.area_in1.sum(min_count=1),survey_out=z.area_de2.sum(min_count=1),
+                    sim_in_same_reporters=z.loc[z.area_in1.notna(),'rented_in'].sum(),sim_out_same_reporters=z.loc[z.area_de2.notna(),'rented_out'].sum(),
+                    sim_in=z.rented_in.sum(),sim_out=z.rented_out.sum(),
+                    obs_intensity=((G+C)/z.area_e.where(D&z.area_e.gt(0))).median(),
+                    sim_intensity=((g+crop)/z.operated.where(d&z.operated.gt(0))).median(),
+                    obs_yield=z.loc[volume,'prod_food'].sum()/G[volume].sum(),sim_yield=z.grain_kg.sum()/g.sum(),
+                    obs_kg=z.loc[volume,'prod_food'].sum(),sim_kg=z.loc[volume,'grain_kg'].sum(),
+                    participation_error=pe,mix_error=me,share_mae=ma,area_error=ae,gate=(pe<=.1 and me<=.1 and ma<=.15 and ae<=.1)))
+                eligible=z.area_e.ge(0)&(~D|z.area_e.gt(0))
+                both=[x[eligible].to_numpy(float) for x in (z.operated,g,crop,z.area_e,G,C)]
+                effect=area_shapley(both[:3],both[3:])
+                gap=float((G-g).sum()); explained=float((G-g)[eligible].sum())
+                np.testing.assert_allclose(effect.sum(),explained,atol=1e-7)
+                decomposition.append(dict(spec=tag,seed=seed,year=y,matched=len(z),decomposed=int(eligible.sum()),
+                    excluded=int((~eligible).sum()),excluded_sown_n=int((D&~eligible).sum()),
+                    participation=effect[0].sum(),physical_area=effect[1].sum(),intensity=effect[2].sum(),grain_share=effect[3].sum(),
+                    four_term_gap=explained,unidentified_physical_stock_gap=gap-explained,total_grain_gap=gap))
+    for name,rows in [('area_shapley',decomposition),('accounts',audit),('annual_behavior',behavior),('reproduction_checks',agreements)]:
+        pd.DataFrame(rows).to_csv(out/(name+'.csv'),index=False)
+    if final:
+        pd.DataFrame(behavior).query('seed>=301').groupby(['year','spec']).gate.agg(['sum','count']).to_csv(out/'acceptance.csv')
+        b=pd.DataFrame(behavior).query('seed>=301')
+        for year,d in b.groupby('year'):
+            for v in ('sim_grain','sim_active','sim_mixed','sim_close_area','sim_in','sim_out','area_error','gate'):
+                x=d.pivot(index='seed',columns='spec',values=v).astype(float)
+                assert list(x)==['M0','R0','R3'] and len(x)==20 and x.notna().all().all()
+                for tag,s in {'M0':x.M0,'R0':x.R0,'R3':x.R3,'R3-R0':x.R3-x.R0,'R3-M0':x.R3-x.M0}.items():
+                    half=t.ppf(.975,19)*s.std(ddof=1)/np.sqrt(20)
+                    effects.append(dict(year=year,metric=v,spec=tag,n=len(s),mean=s.mean(),median=s.median(),
+                        p05=s.quantile(.05),p95=s.quantile(.95),ci95_low=s.mean()-half,ci95_high=s.mean()+half))
+        pd.DataFrame(effects).to_csv(out/'paired_20.csv',index=False)
+
+
+if __name__=="__main__" and __import__('sys').argv[1:2]==['audit-v41']:
+    import sys
+    audit_v41(sys.argv[2],final='final' in sys.argv[3:])
+elif __name__=="__main__" and __import__('sys').argv[1:2]==['audit-v4-repair']:
     import sys
     audit_v4_behavior_repair(sys.argv[2],len(sys.argv)>3 and sys.argv[3]=='final')
 elif __name__=="__main__" and __import__('sys').argv[1:2]==['audit-v4']:

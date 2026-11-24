@@ -101,6 +101,86 @@ def candidate_cohort(out=None):
 if __name__=='__main__':candidate_cohort(OUTPUT)
 
 
+def prepare_scale_inputs(cohort):
+    """NFPS stocks, comparable flow subsets, and lagged pool profiles for the frozen cohort."""
+    from core.extract_microdata_features import REGION_MAPPING
+    flow='hhid id year smgen area_b area_b1 area_e area_e1 area_in area_in1 area_de area_de2 sow_food sow_cash sow_oother sow_total prod_food'.split()
+    expenses=['seed','fer','pes','mach','weir','labor_hf']
+    children=[f'{p}_{c}' for c in ('w','r','c','s','t','o') for p in ('sow',*expenses)]
+    dictionary=pd.read_excel(RAW.parent/'household variables2009-2015.xlsx',header=None).set_index(0)[1]
+    children=[name for name in children if name in dictionary.index]
+    question=(RAW.parent/'2009-2017农户调查问卷.txt').read_text(encoding='utf-8-sig')
+    for v,label,question_id in [('area_in1','转包入','NH2-7'),('area_de2','转包出','NH2-10')]:
+        assert label in dictionary[v] and any(label in line and '亩' in line and question_id in line for line in question.splitlines())
+    raw=pd.read_csv(RAW,usecols=flow+children,dtype={'hhid':'string','id':'string'})
+    clean_area(raw)
+    base=raw.iloc[cohort.source_row.to_numpy()-2].copy()
+    assert len(base)==base.hhid.nunique()==600 and base.hhid.eq(base.id).all() and base.year.eq(2010).all()
+    key=base[['hhid','id','smgen']].assign(actor=cohort.cohort_agent_id.to_numpy())
+    known=raw[~raw.duplicated(['year','hhid'],keep=False)&raw.hhid.notna()&raw.hhid.eq(raw.id)].copy()
+    panel=known.merge(key,on=['hhid','id','smgen'],validate='m:1')
+    donors=known[~known.hhid.isin(key.hhid)].copy()
+    geo={p:z for z,ps in REGION_MAPPING.items() for p in ps}
+    donors['macro']=donors.smgen.map(geo)
+    donors=donors[donors.macro.notna()&donors.area_e.ge(0)].copy()
+    bins=[0.,5.,15.,30.,np.inf]
+    donors['size']=pd.cut(donors.area_e,bins,right=False,labels=False)
+    base['size']=pd.cut(base.area_e,bins,right=False,labels=False)
+    for side,total in [('area_in1','area_in'),('area_de2','area_de')]:
+        x=donors[side].where(donors[side].ge(0))
+        donors[side]=x.mask(x.isna()&donors[total].eq(0),0.)
+    total=donors.sow_food+donors.sow_cash
+    donors['share']=(donors.sow_food/total.where(total>0)).where(donors.sow_food.ge(0)&donors.sow_cash.ge(0))
+    donors['intensity']=total.where(donors.share.notna())/donors.area_e.where(donors.area_e.gt(0))
+    donors['yield']=donors.prod_food.where(donors.prod_food.gt(0))/donors.sow_food.where(donors.sow_food.gt(0))
+    cpi=pd.read_csv(ROOT/'config/experiments/national_real2024_cpi_20260909.csv')
+    multiplier={y:(1+cpi[cpi.year.between(y+1,2024)].annual_change_percent/100).prod() for y in range(2009,2016)}
+    cost_area=np.zeros(len(donors)); cost_sum=np.zeros(len(donors))
+    for crop in ('w','r','c','s','t','o'):
+        cols=[f'{k}_{crop}' for k in expenses]
+        if any(k not in donors for k in cols): continue
+        area=donors[f'sow_{crop}']
+        valid=donors[cols].ge(0).all(axis=1)&area.gt(0)
+        cost_area+=area.where(valid,0.).to_numpy()
+        cost_sum+=donors[cols].sum(axis=1).where(valid,0.).to_numpy()
+    donors['budget_grain']=np.divide(cost_sum,cost_area,out=np.full(len(cost_area),np.nan),where=cost_area>0)*donors.year.map(multiplier)
+    annual={}; profiles=[]; sources=[]
+    for y in range(2011,2017):
+        # The 2016 profile is also the frozen profile for any simulation beyond data coverage.
+        lag=donors[donors.year.lt(y)]
+        annual[y]={}
+        for zone,local in base.groupby('smgen'):
+            region=geo[zone]; macro=lag[lag.macro.eq(region)]
+            within=macro[macro.smgen.eq(zone)]
+            limits={'supply':0.,'demand':0.}
+            for size,h in local.groupby('size'):
+                a=within[within['size'].eq(size)]
+                group=a if len(a)>=30 else macro[macro['size'].eq(size)]
+                if len(group)<30: group=macro
+                # Reported nonnegative mu divided by eligible exposures is a lower bound;
+                # blanks contribute no measured numerator, but are not asserted to be zeros.
+                for side,field in [('supply','area_de2'),('demand','area_in1')]:
+                    x=group[field]
+                    cap=x.sum()/len(group)*len(h)
+                    limits[side]+=cap
+                    sources.append(dict(year=y,source_end=int(group.year.max()),region=int(zone),size=int(size),side=side,
+                        donor_basis='province_size' if group is a else 'macro_size_or_macro',exposures=len(group),
+                        reports=x.count(),reported_mu=x.sum(),cohort_exposure=len(h),capacity_mu=cap))
+            output_profile={}
+            for k,col in [('share','share'),('intensity','intensity'),('grain_yield','yield'),('grain_cost','budget_grain')]:
+                population=within[col].dropna()
+                if k=='intensity':population=population[population.gt(0)]
+                if len(population)<30:
+                    population=macro[col].dropna()
+                    if k=='intensity':population=population[population.gt(0)]
+                output_profile[k]=float(population.median()) if len(population) else None
+                output_profile[k+'_n']=len(population)
+            record=dict(**limits,**output_profile)
+            annual[y][int(zone)]=record
+            profiles.append(dict(year=y,region=int(zone),**record))
+    return panel,annual,pd.DataFrame(profiles),pd.DataFrame(sources)
+
+
 def prepare_v4_inputs(cohort, output, deflator, chfs=None, *, repair=False):
     """Read source definitions and estimate only on pre-outcome, non-cohort records."""
     from core.v4_household import features, repair_features, fit_categories, DIRECTIONS, FIELD_NAMES

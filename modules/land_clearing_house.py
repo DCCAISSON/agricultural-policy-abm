@@ -2345,7 +2345,7 @@ class LandClearingHouse:
         if patch_a not in farmer_b.land_patches:
             farmer_b.land_patches.append(patch_a)
     @staticmethod
-    def clear_area_orders(orders, year, term, *, space=None):
+    def clear_area_orders(orders, year, term, *, space=None, external=None, household_ids=()):
         """Uniform marginal midpoint per region; quantities are divisible physical mu."""
         from collections import defaultdict
         groups = defaultdict(list)
@@ -2424,4 +2424,32 @@ class LandClearingHouse:
                     d['rent']=price
                     assert d['ask']<=price<=d['bid']
                 deals.extend(local)
+        if external is not None:
+            assert term==1
+            used=defaultdict(float)
+            regional_rent={}
+            for d in deals:
+                used[d['seller'],'sell']+=d['area']
+                used[d['buyer'],'buy']+=d['area']
+                regional_rent[d['region']]=d['rent']
+            for region,profile in sorted(external.items()):
+                rent=regional_rent.get(region,profile['reference_rent'])
+                pool=f'_area_pool_{region}'
+                for side,limit in [('buy','supply'),('sell','demand')]:
+                    room=profile[limit]
+                    eligible=[o for o in groups.get(region,[]) if o['id'] in household_ids and o['side']==side]
+                    for order in sorted(eligible,key=lambda o:(-o['price'] if side=='buy' else o['price'],o['id'])):
+                        if room<=1e-8:break
+                        if (side=='buy' and order['price']<rent) or (side=='sell' and order['price']>rent):continue
+                        actor=order['id']
+                        offset=used[actor,side]
+                        amount=min(room,order['quantity']-offset)
+                        if amount<=1e-8:continue
+                        room-=amount
+                        selling=side=='sell'
+                        deals.append(dict(region=region,seller=actor if selling else pool,buyer=pool if selling else actor,
+                            area=amount,ask=order['price'] if selling else rent,bid=rent if selling else order['price'],
+                            start=year,end=year,plot=actor if selling else None,slice_start=offset if selling else None,
+                            slice_end=offset+amount if selling else None,search_fee=0.,rent=rent,
+                            channel='external_demand' if selling else 'external_supply'))
         return deals

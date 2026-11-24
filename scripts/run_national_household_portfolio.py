@@ -326,6 +326,18 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                cash_sale,*[req['other_cost_per_mu'][t] for t in ('grain','cash_crop')],
                *[req['labor_days'][t] for t in ('grain','cash_crop')]) for z,y in yield_map.items()}
     base=b.set_index('actor')
+    use_pool=settings.get('scale') in ('R1','R3')
+    use_economic=settings.get('scale') in ('R2','R3')
+    if use_pool:
+        from scripts.prepare_nfps_v3 import prepare_scale_inputs
+        _,pool,profiles_out,capacity_out=prepare_scale_inputs(cohort)
+        profiles_out.to_csv(dest/'pool_profiles.csv',index=False)
+        capacity_out.to_csv(dest/'pool_capacity_sources.csv',index=False)
+        for by_zone in pool.values():
+            for z,v in by_zone.items():
+                assert v['share'] is not None and v['intensity'] is not None
+                if not v['grain_yield']:v['grain_yield']=yield_map[z]
+                if v['grain_cost'] is None:v['grain_cost']=inputs[z][2]
     if stage:
         from scripts.prepare_nfps_v3 import prepare_v4_inputs
         import os
@@ -476,6 +488,8 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                     knockouts={'A':{},'B':{'stay':True},'C':{'scores':True},'D':{'rent_in':True},
                                'E':{},'F':{'stay':False},'G_labor':{},'G_cash':{}}
                     model.area_economy['behavior_diagnostic']=dict(trace=True,**knockouts[settings['ablation']])
+                if use_economic:
+                    model.area_economy['behavior_diagnostic']=dict(economic_participation=True)
                 if stage>=4:
                     from modules.spatial_index import area_moore_neighbors
                     space=area_moore_neighbors(actors)
@@ -486,10 +500,12 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                          edges=int(space['neighbors'].nnz)))
                     from scipy.sparse import save_npz
                     save_npz(private/(name+'_neighbors.npz'),space['neighbors'])
-            logs=[];contracts=[];offers=[];sars=[]
+            logs=[];contracts=[];offers=[];sars=[];outside=[]
             if transition is not None: model.area_economy['transition']=transition
             if history is not None: model.area_economy['continuous_crop_history']=history
             for yr in range(2011,2012 if settings.get('ablation') else 2016):
+                if use_pool:
+                    model.area_economy['scale_pool']=pool[min(2016,yr)]
                 if soft and not stage:
                     model.area_economy.update(regional_history=annual[min(2012,yr-1)],macro_region=geo,crop_penalty=penalty)
                     if penalties is not None:model.area_economy['actor_crop_penalty']=penalties
@@ -498,8 +514,14 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                 ar=pd.DataFrame(rows); logs.append(ar);offers.extend(dict(year=yr,**o) for o in orders)
                 contracts.extend(deals);sars.append(sar)
                 fam=ar[ar.kind=='household']; org=ar[ar.kind!='household']
-                assert abs(ar.operated.sum()-b.area_e.sum())<1e-6
-                assert abs(ar.rent_received.sum()-ar.rent_paid.sum())<1e-6
+                external=pd.DataFrame(model.area_external_last)
+                net_land=net_rent=0.
+                if use_pool:
+                    outside.append(external)
+                    net_land=(external.operated-external.opening_area).sum()
+                    net_rent=(external.rent_received-external.rent_paid).sum()
+                assert abs(ar.operated.sum()+net_land-b.area_e.sum())<1e-6
+                assert abs(ar.rent_received.sum()-ar.rent_paid.sum()+net_rent)<1e-6
                 assert (ar.closing-ar.opening-ar.net+ar.consumption).abs().max()<1e-6
                 for kind,group in [('all',ar),('household',fam),('organization',org),
                                  ('company',ar[ar.kind=='AGRI_CORPORATION']),('coop',ar[ar.kind=='COOPERATIVE'])]:
@@ -542,6 +564,7 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                         full_gate=bool(error<=.10 and mae<=.15 and abs(g.sum()-G.sum())/G.sum()<=.10))
             df=pd.concat(logs)
             df.to_csv(private/(name+'_accounts.csv'),index=False)
+            if use_pool:pd.concat(outside).to_csv(private/(name+'_external.csv'),index=False)
             pd.DataFrame(contracts).to_csv(private/(name+'_contracts.csv'),index=False)
             pd.DataFrame(offers).to_csv(private/(name+'_orders.csv'),index=False)
             def clean(obj):
@@ -640,7 +663,51 @@ def run_v4_repair_suite(destination, workers):
     audit_v4_behavior_repair(dst,final=True)
 
 
-if __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-repair-suite']:
+def run_v41_suite(destination, workers):
+    """Run the prespecified one-pass V4.1 comparisons, with private ledgers separated."""
+    from concurrent.futures import ThreadPoolExecutor
+    import os
+    import subprocess
+    import sys
+    dst=Path(destination)
+    dst.mkdir(parents=True,exist_ok=False)
+    root=dst/'PRIVATE_DO_NOT_SHARE'
+    root.mkdir()
+    (dst/'run_01').mkdir()
+    manifest=old.read(old.ROOT/'results/diagnostics/national_crop_mix_repair_20261123/run_01/run_manifest.json')
+    checks=[arg for arg in manifest['tests_command'].split() if arg.startswith('tests/')]
+    subprocess.run([sys.executable,'-B','-X','utf8','-m','pytest','-q',*checks,
+        'tests/test_continuous_crop_history.py','tests/test_v3_crop_response.py','tests/test_v4_area_economy.py',
+        f'--junitxml={dst/"run_01"/"tests.xml"}'],check=True)
+    tasks=[(spec,spec+'_diag',[] if spec in ('R0','R3') else ['--no-repeat'])
+           for spec in ('M0','R0','R1','R2','R3')]
+    tasks.extend((spec,f'{spec}_{lo}',['--no-repeat','--seeds',*map(str,range(lo,lo+5))])
+                 for lo in range(301,321,5) for spec in ('M0','R0','R3'))
+    env=dict(os.environ,OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1')
+    def run(task):
+        spec,name,args=task
+        mode='M0' if spec=='M0' else 'V4'
+        options=[] if mode=='M0' else ['--repair']
+        if spec in ('R1','R2','R3'):
+            options.extend(['--scale',spec])
+        with (root/(name+'.log')).open('w',encoding='utf-8') as f:
+            subprocess.run([sys.executable,'-B','-X','utf8','-m','scripts.run_national_household_portfolio',
+                'v4',mode,str(root/name),*options,*args],env=env,stdout=f,stderr=subprocess.STDOUT,check=True)
+        print(name,'complete',flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(run,tasks))
+    from scripts.audit_household_portfolio_behavior import audit_v41
+    audit_v41(dst,final=True)
+
+
+if __name__ == "__main__" and __import__('sys').argv[1:2]==['v41-suite']:
+    import sys
+    p=argparse.ArgumentParser()
+    p.add_argument('destination')
+    p.add_argument('--workers',type=int,default=4)
+    ns=p.parse_args(sys.argv[2:])
+    run_v41_suite(ns.destination,ns.workers)
+elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-repair-suite']:
     import sys
     p=argparse.ArgumentParser()
     p.add_argument('destination')
@@ -678,6 +745,7 @@ elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
     p.add_argument('--budget',choices=['frozen','low','mid','high'],default='frozen')
     p.add_argument('--ablation',choices=['A','B','C','D','E','F','G_labor','G_cash'])
     p.add_argument('--repair',action='store_true',help='enable the one frozen household behavior repair')
+    p.add_argument('--scale',choices=['R1','R2','R3'],help='V4.1 predeclared scale contrast (R0: repair only)')
     for x in ('grain','cash','wage','rent','cash-funds'): p.add_argument('--'+x,type=float,default=0.)
     v=vars(p.parse_args(sys.argv[2:]))
     v['stage']=4 if v['mode']=='V4' else int(v['mode'][1])
@@ -685,6 +753,8 @@ elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
         p.error('A–D require M1; E–G require M2')
     if v['repair'] and (v['stage']!=4 or v['ablation']):
         p.error('repair requires the complete V4 configuration')
+    if v['scale'] and not v['repair']:
+        p.error('R1/R2/R3 require --repair')
     dest=v.pop('destination')
     run_area_structures(dest,'D',settings=v)
 elif __name__ == "__main__":
