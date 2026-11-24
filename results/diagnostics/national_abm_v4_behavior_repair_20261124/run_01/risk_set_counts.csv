@@ -1,0 +1,13 @@
+response_year,risk_set,n,planted_all,planted_two,no_prior_two
+2010,all,16682,12932,12659,3632
+2010,operator_or_recorded_right,13121,12368,12234,355
+2010,zero_operating_area_no_positive_right,299,80,76,245
+2010,unknown,3262,484,349,3032
+2011,all,15712,12223,11924,3480
+2011,operator_or_recorded_right,12311,11672,11467,374
+2011,zero_operating_area_no_positive_right,308,68,56,246
+2011,unknown,3093,483,401,2860
+2012,all,15117,11508,11154,3653
+2012,operator_or_recorded_right,11589,11006,10748,424
+2012,zero_operating_area_no_positive_right,279,52,42,235
+2012,unknown,3249,450,364,2994

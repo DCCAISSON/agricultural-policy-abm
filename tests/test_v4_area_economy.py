@@ -97,3 +97,37 @@ def test_tabular_update_smoke_on_synthetic_regional_transition():
     g.q_table_frozen=True
     g._update_q_table(6.,new_state)
     assert g.q_table[g.last_state][0]==1.
+
+
+def test_repair_uses_entry_draw_and_lagged_land_risk_without_cash_covariate():
+    from core.v4_household import repair_features
+    state,fit,u=fixture()
+    state['prior']=[np.nan,np.nan]
+    state['had_operating_land']=[True,False]
+    state['funds']=[500.,500.]
+    fit.update(entry_shares={'all':np.array([0.,1.])},direction_by_prior=np.zeros((3,3,8)),
+               stay_operator=np.zeros((2,8)),enter_landless=np.zeros((2,8)))
+    fit['stay_operator'][1,0]=9.
+    fit['enter_landless'][1,0]=-2.
+    u[:,0]=.01
+    u[:,2]=[.1,.9]
+    a=farm_batch(state,fit,u,stage=4,incentive=0.)
+    assert a['target'].tolist()==[0.,1.]
+    assert a['grain'][0]==a['crop'][1]==0.
+    assert a['crop'][0]>0 and a['grain'][1]>0
+    assert a['stay_probability'][0]>.99 and a['stay_probability'][1]<.2
+    state['funds']=[10.,10.]
+    b=farm_batch(state,fit,u,stage=4,incentive=0.)
+    np.testing.assert_array_equal(a['stay_probability'],b['stay_probability'])
+    assert (b['cultivated']<a['cultivated']).all()
+    x=repair_features(np.array([0.,np.nan]),np.array([1.,1.]),np.array([1.,1.]),
+                      np.array([0.,0.]),np.array(['R','R']),['R'],0)
+    assert (x[0,:-1]==x[1,:-1]).all() and x[:, -1].tolist()==[1.,0.]
+
+
+def test_ablation_records_positive_plan_rejected_by_stay_random_draw():
+    s,f,u=fixture()
+    f['stay'][1,0]=-10.
+    a=farm_batch(s,f,u,stage=1,diagnostic={'stay':True,'trace':True},incentive=0.)
+    assert (a['stay_u']>a['stay_probability']).all()
+    assert (a['plan_sown']>0).all() and not a['cultivated'].any()

@@ -329,7 +329,8 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
     if stage:
         from scripts.prepare_nfps_v3 import prepare_v4_inputs
         import os
-        fitted,profiles=prepare_v4_inputs(cohort,dest,deflator,os.environ.get('AP_ABM_CHFS2011'))
+        fitted,profiles=prepare_v4_inputs(cohort,dest,deflator,os.environ.get('AP_ABM_CHFS2011'),
+                                         repair=settings.get('repair',False))
         paired=sell[sell.output.gt(0)&sell.sales_quantity.between(0,sell.output)&sell.labor.gt(0)&sell.nonlabor_low.ge(0)].copy()
         paired['sale2024']=paired.sales_amount*paired.to_2024
         paired['mech2024']=paired.machinery*paired.to_2024
@@ -421,12 +422,20 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                 if stage:
                     profile=profiles.loc[a.unique_id]
                     a.area_prior_transfer=int(profile.flow)
+                    if settings.get('repair'):
+                        a.area_previous_operated=a.base_area
                     yy=float(profile.grain_yield)
                     a.area_grain_yield=yy if np.isfinite(yy) and yy>0 else yield_map[a.zone]
                     if stage>=2 and np.isfinite(profile.labor):
                         a.family_days=float(profile.labor)
-                    if stage>=2 and np.isfinite(profile.initial_liquidity):
+                    # In repair mode use the same NFPS stock definition for both observed
+                    # and missing cases. A CHFS demand-deposit median is not that stock.
+                    if stage>=2 and not settings.get('repair') and np.isfinite(profile.initial_liquidity):
                         a.balance=float(profile.initial_liquidity)
+                    if settings.get('ablation')=='G_labor':
+                        a.family_days+=10000.
+                    if settings.get('ablation')=='G_cash':
+                        a.balance+=1000000.
                     a.balance*=1.+settings.get('cash_funds',0.)
                 actors.append(a)
             roster=[]
@@ -463,6 +472,10 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                     wage=model.area_economy['wage']*(1.+settings.get('wage',0.)),
                     rent_shift=settings.get('rent',0.),incentive=settings.get('incentive',1.),
                     scalar_reference=settings.get('scalar',False),cash_yield=cash_yield)
+                if settings.get('ablation'):
+                    knockouts={'A':{},'B':{'stay':True},'C':{'scores':True},'D':{'rent_in':True},
+                               'E':{},'F':{'stay':False},'G_labor':{},'G_cash':{}}
+                    model.area_economy['behavior_diagnostic']=dict(trace=True,**knockouts[settings['ablation']])
                 if stage>=4:
                     from modules.spatial_index import area_moore_neighbors
                     space=area_moore_neighbors(actors)
@@ -476,7 +489,7 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
             logs=[];contracts=[];offers=[];sars=[]
             if transition is not None: model.area_economy['transition']=transition
             if history is not None: model.area_economy['continuous_crop_history']=history
-            for yr in range(2011,2016):
+            for yr in range(2011,2012 if settings.get('ablation') else 2016):
                 if soft and not stage:
                     model.area_economy.update(regional_history=annual[min(2012,yr-1)],macro_region=geo,crop_penalty=penalty)
                     if penalties is not None:model.area_economy['actor_crop_penalty']=penalties
@@ -594,7 +607,47 @@ def run_v4_suite(destination, workers):
     audit_v4(dst)
 
 
-if __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-suite']:
+def run_v4_repair_suite(destination, workers):
+    """Replay the frozen, ablation and repaired cases with the existing annual engine."""
+    from concurrent.futures import ThreadPoolExecutor
+    import subprocess
+    import sys
+    dst=Path(destination)
+    root=dst/'PRIVATE_DO_NOT_SHARE'
+    root.mkdir(parents=True,exist_ok=False)
+    (dst/'run_01').mkdir()
+    manifest=old.read(old.ROOT/'results/diagnostics/national_crop_mix_repair_20261123/run_01/run_manifest.json')
+    checks=[arg for arg in manifest['tests_command'].split() if arg.startswith('tests/')]
+    subprocess.run([sys.executable,'-B','-X','utf8','-m','pytest','-q',*checks,
+        'tests/test_continuous_crop_history.py','tests/test_v3_crop_response.py','tests/test_v4_area_economy.py',
+        f'--junitxml={dst/"run_01"/"tests.xml"}'],check=True)
+    tasks=[('M1' if k in 'ABCD' else 'M2',k,['--no-repeat','--ablation',k])
+           for k in ('A','B','C','D','E','F','G_labor','G_cash')]
+    tasks.append(('V4','repair',['--repair']))
+    for k in range(201,221,5):
+        for mode,stem in [('M0','M0'),('V4','repair')]:
+            tasks.append((mode,f'{stem}_{k}',[*(['--repair'] if mode=='V4' else []),
+                         '--no-repeat','--seeds',*map(str,range(k,k+5))]))
+    def run(task):
+        mode,name,args=task
+        with (root/(name+'.log')).open('w',encoding='utf-8') as f:
+            subprocess.run([sys.executable,'-B','-X','utf8','-m','scripts.run_national_household_portfolio',
+                'v4',mode,str(root/name),*args],stdout=f,stderr=subprocess.STDOUT,check=True)
+        print(name, 'complete', flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(run,tasks))
+    from scripts.audit_household_portfolio_behavior import audit_v4_behavior_repair
+    audit_v4_behavior_repair(dst,final=True)
+
+
+if __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-repair-suite']:
+    import sys
+    p=argparse.ArgumentParser()
+    p.add_argument('destination')
+    p.add_argument('--workers',type=int,default=5)
+    ns=p.parse_args(sys.argv[2:])
+    run_v4_repair_suite(ns.destination,ns.workers)
+elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-suite']:
     import sys
     p=argparse.ArgumentParser()
     p.add_argument('destination')
@@ -623,9 +676,15 @@ elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
     p.add_argument('--capital',type=float,default=1.)
     p.add_argument('--incentive',type=float,default=1.)
     p.add_argument('--budget',choices=['frozen','low','mid','high'],default='frozen')
+    p.add_argument('--ablation',choices=['A','B','C','D','E','F','G_labor','G_cash'])
+    p.add_argument('--repair',action='store_true',help='enable the one frozen household behavior repair')
     for x in ('grain','cash','wage','rent','cash-funds'): p.add_argument('--'+x,type=float,default=0.)
     v=vars(p.parse_args(sys.argv[2:]))
     v['stage']=4 if v['mode']=='V4' else int(v['mode'][1])
+    if v['ablation'] and v['stage']!=(1 if v['ablation'] in 'ABCD' else 2):
+        p.error('A–D require M1; E–G require M2')
+    if v['repair'] and (v['stage']!=4 or v['ablation']):
+        p.error('repair requires the complete V4 configuration')
     dest=v.pop('destination')
     run_area_structures(dest,'D',settings=v)
 elif __name__ == "__main__":

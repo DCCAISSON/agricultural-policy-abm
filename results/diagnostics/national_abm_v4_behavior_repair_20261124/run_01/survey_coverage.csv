@@ -1,0 +1,7 @@
+year,cohort,matched,duplicate,absent_key,seen_unmatched,marked_followup_failed,followup_unknown,complete_area,total_identity_tested,total_identity_matched,not_sown,grain,cash,mixed,other,unknown
+2010,600,600,0,0,0,19,0,600,600,600,8,207,40,336,9,0
+2011,600,569,0,31,0,26,0,569,569,569,23,199,47,293,7,31
+2012,600,533,0,67,0,20,0,533,533,533,29,187,47,261,9,67
+2013,600,537,0,63,0,8,0,537,537,537,55,167,52,255,8,63
+2014,600,532,0,68,0,13,0,532,532,532,75,171,44,234,8,68
+2015,600,534,2,64,0,10,1,534,534,534,79,180,58,207,10,66

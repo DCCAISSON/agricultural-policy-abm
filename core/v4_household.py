@@ -24,6 +24,13 @@ def features(share, area, workers, liquidity, transfer, region, regions, year):
     return x.astype(float)
 
 
+def repair_features(prior, area, workers, transfer, region, regions, year):
+    """Use the same non-cash covariates for estimation and simulation."""
+    represented=np.isfinite(prior)
+    x=features(np.where(represented,prior,0.),area,workers,np.zeros(len(area)),transfer,region,regions,year)
+    return np.column_stack((np.delete(x,4,axis=1),represented))
+
+
 def fit_categories(x, y, cluster, classes):
     from scipy.optimize import minimize
     from scipy.special import logsumexp
@@ -57,21 +64,35 @@ def fit_categories(x, y, cluster, classes):
     return coef, np.vstack((np.zeros(p), np.sqrt(sandwich.diagonal()).reshape(classes-1, p)))
 
 
-def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.):
+def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0., diagnostic=None):
     """Three feasible physical plans, followed by one probability draw per household."""
     land, rights, funds, rent, intensity, labor, workers, transfer, prior, region = (
         np.asarray(state[k]) for k in ('land','rights','funds','rent','intensity','labor',
                                        'workers','transfer','prior','region'))
     revenue_g, revenue_c, cost_g, cost_c, labor_g, labor_c, wage, aid = np.asarray(state['inputs']).T
-    prior = np.where(np.isfinite(prior), prior, fit['prior_median'])
-    x = features(prior, land, workers, funds, transfer, region, fit['regions'], 0)
     bounds = np.array([5.,15.,30.])
+    repaired='entry_shares' in fit
+    entry=~np.isfinite(prior)
+    if repaired:
+        x=repair_features(prior,land,workers,transfer,region,fit['regions'],0)
+        init_group=np.digitize(land,bounds)
+        guess=np.zeros(len(prior))
+        for i in np.flatnonzero(entry):
+            donor=fit['entry_shares'].get((region[i],int(init_group[i])),fit['entry_shares']['all'])
+            guess[i]=donor[min(int(u[i,2]*len(donor)),len(donor)-1)]
+        prior=np.where(entry,guess,prior)
+    else:
+        prior = np.where(np.isfinite(prior), prior, fit['prior_median'])
+        x = features(prior, land, workers, funds, transfer, region, fit['regions'], 0)
     group = 3*np.digitize(land,bounds)+np.digitize(prior,[1e-8,1.-1e-8])
     ep=fit['endpoint'][group]
     draw=np.clip((u[:,2,None]-ep)/np.maximum(1e-10,1.-ep),0.,1.)
     magnitudes = fit['amplitudes'][group[:,None],np.arange(2),np.minimum((draw*19).astype(int),18)]
     magnitudes=np.where(u[:,2,None]<ep,1.,magnitudes)
     shares = np.column_stack((prior*(1-magnitudes[:,0]),prior,prior+(1.-prior)*magnitudes[:,1]))
+    if repaired:
+        # New and re-entering farms have a drawn initial composition, not a synthetic incumbent.
+        shares[entry]=prior[entry,None]
     material = cost_c[:,None] + (cost_g-cost_c)[:,None]*shares
     days = labor_c[:,None] + (labor_g-labor_c)[:,None]*shares
     sales = revenue_c[:,None] + (revenue_g+grain_aid-revenue_c)[:,None]*shares
@@ -80,8 +101,9 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.)
     cash_cap = np.minimum(funds[:,None]/material,
         (funds+wage*labor)[:,None]/(material+wage[:,None]*days))
     family_cusp = labor[:,None]/days
+    flags=diagnostic or {}
     if trade:
-        can_buy = (rent > 0.) if stage == 1 else (u[:,4] < expit(x @ fit['rent_in'][1])) & (rent > 0.)
+        can_buy = (u[:,4] < expit(x @ fit['rent_in'][1])) & (rent > 0.) if flags.get('rent_in',stage>=2) else rent>0.
         marginal_after_hires = sales-material-wage[:,None]*days-rent[:,None]/intensity[:,None]
         # The rent-bearing tranche is feasible only after funding retained land first.
         unbounded = np.maximum(land,np.asarray(state['limit']))*intensity
@@ -118,17 +140,26 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.)
     best = np.maximum(best,pv)
     slack = np.maximum(0.,labor[:,None]-days*total)/180.
     liquid = np.log1p(np.maximum(0.,funds[:,None]-cost))/10.
-    scores = x @ fit['direction'].T
+    if repaired:
+        ctype=np.digitize(prior,[1e-8,1.-1e-8])
+        scores=np.einsum('ij,ikj->ik',x,fit['direction_by_prior'][ctype])
+    else:
+        scores = x @ fit['direction'].T
     scores += incentive*(best-best[:,1,None])/np.maximum(1.,full[:,None])/fit['return_scale']
-    if stage >= 2:
+    if flags.get('scores',stage>=2):
         scores += .25 * ((slack-slack[:,1,None]) + (liquid-liquid[:,1,None]))
     feasible = (np.abs(shares-prior[:,None])>1e-8) & (total>1e-8)
     feasible[:,1] = True
     probabilities = softmax(np.where(feasible,scores,-np.inf),axis=1)
     idx = (u[:,1,None]>np.cumsum(probabilities,axis=1)[:,:-1]).sum(axis=1)
     i = np.arange(len(idx))
-    if stage >= 2:
-        participation = expit(x@fit['stay'][1]+incentive*np.max(best,axis=1)/np.maximum(1.,full)/fit['return_scale'])
+    if flags.get('stay',stage>=2):
+        if repaired:
+            beta=np.where(np.asarray(state['had_operating_land'])[:,None],fit['stay_operator'][1],fit['enter_landless'][1])
+            p=np.sum(x*beta,axis=1)
+        else:
+            p=x@fit['stay'][1]
+        participation = expit(p+incentive*np.max(best,axis=1)/np.maximum(1.,full)/fit['return_scale'])
     else:
         participation = np.ones(len(idx))
     chosen = total[i,idx] * (u[:,0]<participation)
@@ -136,7 +167,7 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.)
     phys=chosen/intensity
     ask=np.maximum(0.,(sales[i,idx]-material[i,idx]-
         wage*days[i,idx]*(chosen*days[i,idx]>=labor-1e-8))*intensity)
-    can_sell = np.ones(len(idx),dtype=bool) if stage == 1 else (u[:,3]<expit(x@fit['rent_out'][1])) | (chosen<=1e-8)
+    can_sell = (u[:,3]<expit(x@fit['rent_out'][1])) | (chosen<=1e-8) if flags.get('rent_out',stage>=2) else np.ones(len(idx),dtype=bool)
     offer=np.where(can_sell,
                    np.minimum(rights,np.maximum(0.,land-phys)),0.) if trade else np.zeros(len(idx))
     demand=np.maximum(0.,phys-land) if trade else np.zeros(len(idx))
@@ -144,10 +175,18 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.)
     # The plan values retained land at its marginal crop return, exclusive of a nonportable subsidy.
     bid=np.minimum(bid,np.maximum(0.,(sales[i,idx]-material[i,idx]-
         wage*days[i,idx]*(chosen*days[i,idx]>labor+1e-8))*intensity))
-    return dict(grain=g,crop=c,cultivated=phys,eligible=np.minimum(rights,phys),
+    record=dict(grain=g,crop=c,cultivated=phys,eligible=np.minimum(rights,phys),
                 hired=np.maximum(0.,chosen*days[i,idx]-labor),
                 cost=chosen*material[i,idx]+wage*np.maximum(0.,chosen*days[i,idx]-labor),
                 family=np.minimum(labor,chosen*days[i,idx]),offer=offer,demand=demand,ask=ask,bid=bid,
                 stay_probability=participation,direction=idx,probabilities=probabilities,
                 shadow_cash=chosen>=cash_cap[i,idx]-1e-7, value=best[i,idx],
                 prior=prior, target=shares[i,idx])
+    if flags.get('trace'):
+        record.update(stay_u=u[:,0],plan_sown=total[i,idx],plan_land=total[i,idx]/intensity,
+            max_sown_land=total_limit[np.arange(len(idx)),idx] if total_limit.shape[1]==3 else total_limit[:,0],
+            max_sown_affordable=q[i,idx],plan_cash=cost[i,idx],plan_hired=hired[i,idx],
+            plan_labor=total[i,idx]*days[i,idx],classifier_funds=funds,
+            labor_binding=total[i,idx]*days[i,idx]>=labor-1e-8,
+            land_binding=(total[i,idx]>=full-1e-7)&(total[i,idx]>1e-7))
+    return record

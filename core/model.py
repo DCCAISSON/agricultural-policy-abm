@@ -3706,7 +3706,10 @@ class MainModel(Model):
             index={k:i for i,k in enumerate(ids)}
             u=uniforms(e['seed'],year,ids)
             fitted=e['v4_fit'][min(2012,year-1)]
+            diagnostic=e.get('behavior_diagnostic')
             prior=np.array([g/(g+c) if g+c>1e-7 else np.nan for g,c in (a.prior_crops for a in families)])
+            if 'entry_shares' in fitted:
+                had_operating_land=np.array([a.area_previous_operated>1e-7 or a.lease_right>1e-7 for a in families])
             def batch(positions, trading, fees=None):
                 stock=np.array([positions[k] for k in ids])
                 reserves=np.array([a.reserve for a in families])
@@ -3719,11 +3722,13 @@ class MainModel(Model):
                     transfer=[a.area_prior_transfer for a in families],prior=prior,
                     region=np.array([e['macro_region'][a.zone] for a in families]),
                     inputs=[factors(a) for a in families],limit=[a.area_limit for a in families])
+                if 'entry_shares' in fitted:
+                    data['had_operating_land']=had_operating_land
                 if e.get('scalar_reference'):
                     one=[farm_batch({k:np.asarray(x)[i:i+1] for k,x in data.items()},fitted,u[i:i+1],
-                             stage=v4,trade=trading,incentive=e.get('incentive',1.)) for i in range(len(ids))]
+                             stage=v4,trade=trading,incentive=e.get('incentive',1.),diagnostic=diagnostic) for i in range(len(ids))]
                     return {k:np.concatenate([x[k] for x in one]) for k in one[0]}
-                return farm_batch(data,fitted,u,stage=v4,trade=trading,incentive=e.get('incentive',1.))
+                return farm_batch(data,fitted,u,stage=v4,trade=trading,incentive=e.get('incentive',1.),diagnostic=diagnostic)
             first=batch(carry,True)
         for a in actors:
             k=a.unique_id
@@ -3750,6 +3755,10 @@ class MainModel(Model):
                     target_share=first['target'][i],choice_u=u[i,1],family_capacity=a.family_days,
                     p_down=first['probabilities'][i,0],p_hold=first['probabilities'][i,1],
                     p_up=first['probabilities'][i,2],p_stay=first['stay_probability'][i])
+                if diagnostic and diagnostic.get('trace'):
+                    rows[k].update({f'pre_{j}':first[j][i] for j in (
+                        'stay_u','plan_sown','plan_land','max_sown_land','max_sown_affordable','plan_cash',
+                        'plan_hired','plan_labor','classifier_funds','labor_binding','land_binding','value')})
                 continue
             if 'transition' in e and a.area_kind=='household':
                 import hashlib
@@ -3873,10 +3882,16 @@ class MainModel(Model):
                 if a.area_kind=='household':
                     qty,sales=actual_qty[i],actual_sales[i]
                     a.prior_crops=p['grain'],p['crop']
+                    if 'entry_shares' in fitted:
+                        a.area_previous_operated=land
                     a.area_prior_transfer=int(ins>1e-7)-int(out>1e-7)
                     rows[k].update(family_used=last['family'][i],final_cash_shadow=float(last['shadow_cash'][i]),
                         final_p_down=last['probabilities'][i,0],final_p_hold=last['probabilities'][i,1],
                         final_p_up=last['probabilities'][i,2],final_choice=int(last['direction'][i]))
+                    if diagnostic and diagnostic.get('trace'):
+                        rows[k].update({f'post_{j}':last[j][i] for j in (
+                            'stay_u','stay_probability','plan_sown','plan_land','max_sown_land','max_sown_affordable',
+                            'plan_cash','plan_hired','plan_labor','classifier_funds','labor_binding','land_binding','value')})
             claims[k]=rate*p['eligible']
             if 'transition' in e and a.area_kind=='household':
                 a.prior_crops=p['grain'],p['crop']

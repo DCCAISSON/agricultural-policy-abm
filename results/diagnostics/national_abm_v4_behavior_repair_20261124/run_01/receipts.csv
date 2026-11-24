@@ -1,0 +1,15 @@
+model,seed,test
+M0,103.0,five named ledgers repeat byte-identical
+M1,103.0,five named ledgers repeat byte-identical
+M2,103.0,five named ledgers repeat byte-identical
+M3,103.0,five named ledgers repeat byte-identical
+M4,103.0,five named ledgers repeat byte-identical
+M0_201,,all private M0 re-run artifacts equal to frozen baseline
+M0_206,,all private M0 re-run artifacts equal to frozen baseline
+M0_211,,all private M0 re-run artifacts equal to frozen baseline
+M0_216,,all private M0 re-run artifacts equal to frozen baseline
+repair,103.0,five named ledgers repeat byte-identical
+A,103.0,2011 identical to M1 reference accounts
+A,109.0,2011 identical to M1 reference accounts
+E,103.0,2011 identical to M2 reference accounts
+E,109.0,2011 identical to M2 reference accounts

@@ -101,9 +101,9 @@ def candidate_cohort(out=None):
 if __name__=='__main__':candidate_cohort(OUTPUT)
 
 
-def prepare_v4_inputs(cohort, output, deflator, chfs=None):
+def prepare_v4_inputs(cohort, output, deflator, chfs=None, *, repair=False):
     """Read source definitions and estimate only on pre-outcome, non-cohort records."""
-    from core.v4_household import features, fit_categories, DIRECTIONS, FIELD_NAMES
+    from core.v4_household import features, repair_features, fit_categories, DIRECTIONS, FIELD_NAMES
     from scripts.run_national_household_portfolio import estimate_crop_transitions
     household = {
         'year':'reference year', 'hhid':'panel key (private)', 'id':'key crosscheck (private)',
@@ -157,6 +157,7 @@ def prepare_v4_inputs(cohort, output, deflator, chfs=None):
     for y in (2010,2011,2012):
         paired=estimate_crop_transitions(RAW,set(selected.index),True,y,True)
         cols='hhid area_e hhlabornum saving_1 saving_2 area_in1 area_de2 sow_oother sow_total'.split()
+        if repair: cols.append('area_e1')
         keep=frame.year.eq(y-1)&frame.hhid.isin(paired.hhid)
         keep2=frame.year.eq(y)&frame.hhid.isin(paired.hhid)
         p=paired.merge(frame.loc[keep,cols],on='hhid',validate='1:1').merge(
@@ -173,9 +174,12 @@ def prepare_v4_inputs(cohort, output, deflator, chfs=None):
         liquid=liquid.fillna(liquid.groupby(all_pairs.region).transform('median')).fillna(0)*deflator
         flow=all_pairs.area_in1.gt(0).astype(int)-all_pairs.area_de2.gt(0).astype(int)
         x=features(starts,ar,labor,liquid,flow,all_pairs.region.to_numpy(),regions,all_pairs.year.to_numpy())
+        if repair:
+            x=repair_features(lag,ar,labor,flow,all_pairs.region.to_numpy(),regions,all_pairs.year.to_numpy())
         cluster=all_pairs.hhid.to_numpy(dtype=str)
         diff=all_pairs.share.to_numpy()-starts
         usable=np.isfinite(diff)
+        if repair: usable &= np.isfinite(lag)
         k=np.where(diff>1e-7,2,np.where(diff< -1e-7,0,1))
         group=3*np.digitize(ar,[5.,15.,30.])+np.digitize(starts,[1e-8,1.-1e-8])
         amplitudes=np.empty((12,2,19))
@@ -196,11 +200,47 @@ def prepare_v4_inputs(cohort, output, deflator, chfs=None):
                     median_fraction_of_room=amplitudes[cell,j,9],p95_fraction_of_room=amplitudes[cell,j,-1]))
         out=dict(amplitudes=amplitudes,endpoint=ep,regions=regions,prior_median=median,return_scale=3000.)
         names=('intercept',*FIELD_NAMES,*regions[1:],'year2011','year2012')
-        for rule,valid,target,count,categories in [
+        rules=[
             ('direction',usable,k,3,DIRECTIONS),
             ('stay',all_pairs.sow_total_next.ge(0).to_numpy(),all_pairs.sow_total_next.gt(0).to_numpy(int),2,('not_sowing','sowing')),
             ('rent_in',all_pairs.area_in1_next.ge(0).to_numpy(),all_pairs.area_in1_next.gt(0).to_numpy(int),2,('not_observed_positive','positive')),
-            ('rent_out',all_pairs.area_de2_next.ge(0).to_numpy(),all_pairs.area_de2_next.gt(0).to_numpy(int),2,('not_observed_positive','positive'))]:
+            ('rent_out',all_pairs.area_de2_next.ge(0).to_numpy(),all_pairs.area_de2_next.gt(0).to_numpy(int),2,('not_observed_positive','positive'))]
+        if repair:
+            names=tuple(k0 for k0 in names if k0!='log_liquidity')+('prior_two_crop_known',)
+            right=all_pairs.area_e1.gt(0)
+            operators=(all_pairs.area_e.gt(0)|right).to_numpy()
+            landless=(all_pairs.area_e.eq(0)&~right).to_numpy()
+            next_sown=all_pairs.share.notna().to_numpy(int)
+            next_known=all_pairs.sow_total_next.ge(0).to_numpy()
+            rules=rules[2:]+[(tag,group1&next_known,next_sown,2,('not_sowing_two','sowing_two'))
+                             for tag,group1 in [('stay_operator',operators),('enter_landless',landless)]]
+            out['direction_by_prior']=np.zeros((3,3,x.shape[1]))
+            ptype=np.digitize(starts,[1e-8,1.-1e-8])
+            dir_rows=[]
+            for j,allowed in enumerate(((1,2),(0,1,2),(0,1))):
+                keep=usable&(ptype==j)
+                assert np.isin(k[keep],allowed).all()
+                ydir=np.searchsorted(allowed,k[keep])
+                co,se=fit_categories(x[keep],ydir,cluster[keep],len(allowed))
+                out['direction_by_prior'][j,list(allowed)]=co
+                for ci,action in enumerate(allowed):
+                    for name,b,s in zip(names,co[ci],se[ci]):
+                        dir_rows.append(dict(training_end=y,rule='direction_'+('cash','mixed','grain')[j],
+                            action=DIRECTIONS[action],term=name,coefficient=b,cluster_se=s,
+                            n=int(keep.sum()),households=len(set(cluster[keep])),action_n=int((ydir==ci).sum())))
+            report.extend(dir_rows)
+            pool=~np.isfinite(lag)&all_pairs.share.notna().to_numpy()
+            out['entry_shares']={'all':np.sort(all_pairs.share.to_numpy()[pool])}
+            assert len(out['entry_shares']['all'])>0
+            for z in regions:
+                for cell in range(4):
+                    keep=pool&all_pairs.region.eq(z).to_numpy()&(np.digitize(ar,[5.,15.,30.])==cell)
+                    if keep.sum()>=25: out['entry_shares'][z,cell]=np.sort(all_pairs.share.to_numpy()[keep])
+                    draw=out['entry_shares'].get((z,cell),out['entry_shares']['all'])
+                    transfer_report.append(dict(training_end=y,region=z,group=cell,direction='entry_share',
+                         n=int(keep.sum()),n_donors=len(draw),entry_cash=(draw==0).mean(),
+                         entry_mixed=((draw>0)&(draw<1)).mean(),entry_grain=(draw==1).mean()))
+        for rule,valid,target,count,categories in rules:
             coef,se=fit_categories(x[valid],target[valid],cluster[valid],count)
             out[rule]=coef
             for j,c in enumerate(categories):
