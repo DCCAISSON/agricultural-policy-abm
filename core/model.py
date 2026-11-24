@@ -3693,16 +3693,64 @@ class MainModel(Model):
             return amounts
         carry=position(leases)
         def factors(a):
-            return (*inputs[a.zone],e['wage'],rate)
+            args=(*inputs[a.zone],e['wage'],rate)
+            if 'v4' in e:
+                yield_ratio=getattr(a,'area_grain_yield',e['yields'][a.zone])/e['yields'][a.zone] if e['v4']>=3 else 1.
+                return (args[0]*yield_ratio,*args[1:])
+            return args
+        v4=e.get('v4')
+        if v4:
+            from core.v4_household import farm_batch, uniforms
+            families=[a for a in actors if a.area_kind=='household']
+            ids=[a.unique_id for a in families]
+            index={k:i for i,k in enumerate(ids)}
+            u=uniforms(e['seed'],year,ids)
+            fitted=e['v4_fit'][min(2012,year-1)]
+            prior=np.array([g/(g+c) if g+c>1e-7 else np.nan for g,c in (a.prior_crops for a in families)])
+            def batch(positions, trading, fees=None):
+                stock=np.array([positions[k] for k in ids])
+                reserves=np.array([a.reserve for a in families])
+                funds=np.maximum(0.,np.array([a.balance for a in families])-reserves-stock[:,3]
+                    -(np.array([fees[k] for k in ids]) if fees is not None else 0.))
+                data=dict(land=np.array([a.base_area for a in families])-stock[:,0]+stock[:,1],
+                    rights=np.array([a.lease_right for a in families])-stock[:,0],funds=funds,
+                    rent=[e['rents'][a.zone]*(1.+e.get('rent_shift',0.)) for a in families],intensity=[a.sowing_intensity for a in families],
+                    labor=[a.family_days for a in families],workers=[a.v1_laborers for a in families],
+                    transfer=[a.area_prior_transfer for a in families],prior=prior,
+                    region=np.array([e['macro_region'][a.zone] for a in families]),
+                    inputs=[factors(a) for a in families],limit=[a.area_limit for a in families])
+                if e.get('scalar_reference'):
+                    one=[farm_batch({k:np.asarray(x)[i:i+1] for k,x in data.items()},fitted,u[i:i+1],
+                             stage=v4,trade=trading,incentive=e.get('incentive',1.)) for i in range(len(ids))]
+                    return {k:np.concatenate([x[k] for x in one]) for k in one[0]}
+                return farm_batch(data,fitted,u,stage=v4,trade=trading,incentive=e.get('incentive',1.))
+            first=batch(carry,True)
         for a in actors:
             k=a.unique_id
             out,ins,receivable,payable=carry[k]
             land=a.base_area-out+ins
             rights=a.lease_right-out
             funds=max(0.,a.balance-a.reserve-payable-a.overhead)
-            rent=e['rents'][a.zone]
+            rent=e['rents'][a.zone]*(1.+e.get('rent_shift',0.)) if v4 else e['rents'][a.zone]
             args=factors(a)
             mix={}
+            if v4 and a.area_kind=='household':
+                i=index[k]
+                offer,demand=first['offer'][i],first['demand'][i]
+                if max(offer,demand)>1e-8:
+                    ask=first['ask'][i]
+                    if offer and first['cultivated'][i]<max(0.,rights-offer)-1e-8:
+                        ask=0.
+                    orders.append(dict(id=k,region=a.zone,side='sell' if offer else 'buy',
+                         quantity=max(offer,demand),price=ask if offer else first['bid'][i]))
+                rows[k]=dict(year=year,id=k,kind=a.area_kind,region=a.zone,opening=a.balance,base_area=a.base_area,
+                    rights=a.lease_right,expected_rent=rent,offer=offer,demand=demand,working_funds=funds,
+                    planned_cultivated=first['cultivated'][i],cash_shadow=float(first['shadow_cash'][i]),
+                    planned_grain=first['grain'][i],planned_crop=first['crop'][i],prior_share=prior[i],
+                    target_share=first['target'][i],choice_u=u[i,1],family_capacity=a.family_days,
+                    p_down=first['probabilities'][i,0],p_hold=first['probabilities'][i,1],
+                    p_up=first['probabilities'][i,2],p_stay=first['stay_probability'][i])
+                continue
             if 'transition' in e and a.area_kind=='household':
                 import hashlib
                 g0,c0=a.prior_crops
@@ -3740,6 +3788,7 @@ class MainModel(Model):
                     if trial['demand']>1e-8: plan=trial
             q=plan['offer'] or plan['demand']
             side='sell' if plan['offer'] else 'buy'
+            blocked_by_overhead=False
             if q>1e-8:
                 # Reprice the last unit, not average surplus on the entire order.
                 eps=min(q,1e-4)
@@ -3753,21 +3802,45 @@ class MainModel(Model):
                     before=continuous_farm_plan(a,land+q-eps,rights,work,0.,args,False)
                     after=continuous_farm_plan(a,land+q,rights,work,0.,args,False)
                     price=min(headroom,(after['expected']-before['expected'])/eps/(1.+after['cash_shadow']))
+                    if v4 and v4>=4 and a.area_kind!='household':
+                        # No bid whose full proposed operation cannot cover the business's fixed costs.
+                        price=min(price,(after['expected']-a.overhead)/q)
+                        blocked_by_overhead=price<0.
                 if price>=-1e-7:
                     orders.append(dict(id=k,region=a.zone,side=side,quantity=q,price=max(0.,price)))
             rows[k]=dict(year=year,id=k,kind=a.area_kind,region=a.zone,opening=a.balance,
                          base_area=a.base_area,rights=a.lease_right,expected_rent=rent,
                          offer=plan['offer'],demand=plan['demand'],working_funds=funds,
                          planned_cultivated=plan['cultivated'],cash_shadow=plan['cash_shadow'])
+            if v4 and v4>=4:
+                rows[k]['bid_rejected_overhead']=blocked_by_overhead
             if mix:
                 rows[k].update(**mix,planned_grain=plan['grain'],planned_crop=plan['crop'],
                                labor_shadow=plan['labor_shadow'],land_shadow=plan['land_value'])
-        deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'])
+        if v4 and 'v4_space' in e:
+            deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'],space=e['v4_space'])
+        else:
+            deals=self.land_clearing_house.clear_area_orders(orders,year,e['term'])
         leases.extend(deals)
         e['contracts']=leases
         for d in deals: e['rents'][d['region']]=d['rent']
         final=position(leases)
         claims={}
+        if v4:
+            fees=defaultdict(float)
+            for d in deals: fees[d['buyer']]+=d.get('search_fee',0.)*d['area']
+            last=batch(final,False,fees)
+            weather={}
+            for z in set(a.zone for a in actors):
+                rng=np.random.default_rng([e['seed'],year,int(z)])
+                r=rng.random()
+                weather[z]=(1.-rng.uniform(.05,.10) if r<.05 else
+                            1.+rng.uniform(.0275,.055) if r<.13 else 1.)
+            hv=np.array([getattr(a,'area_grain_yield',e['yields'][a.zone]) if v4>=3 else e['yields'][a.zone] for a in families])
+            hf=np.array([weather[a.zone] for a in families])
+            gain=np.asarray([factors(a)[:2] for a in families])
+            actual_qty=last['grain']*hv*hf
+            actual_sales=(last['grain']*gain[:,0]+last['crop']*gain[:,1])*hf
         for a in actors:
             k=a.unique_id
             out,ins,rental_income,rental_cost=final[k]
@@ -3776,7 +3849,13 @@ class MainModel(Model):
             overhead=a.overhead if a.active_area_business else 0.
             funds=max(0.,a.balance-a.reserve-rental_cost-overhead)
             args=factors(a)
-            p=continuous_farm_plan(a,land,rights,funds,0.,args,False)
+            if v4:
+                funds=max(0.,funds-fees[k])
+            if v4 and a.area_kind=='household':
+                i=index[k]
+                p={c:last[c][i] for c in ('grain','crop','cultivated','eligible','hired','cost')}
+            else:
+                p=continuous_farm_plan(a,land,rights,funds,0.,args,False)
             if not a.active_area_business:
                 assert land<1e-7
             # Same region-year draw regardless of market participation or actor count.
@@ -3786,6 +3865,18 @@ class MainModel(Model):
                    1.+rng.uniform(.0275,.055) if u<.13 else 1.)
             qty=p['grain']*e['yields'][a.zone]*shock
             sales=(p['grain']*args[0]+p['crop']*args[1])*shock
+            if v4:
+                rows[k].update(transaction_cost=fees[k],preplant_funds=funds,weather_factor=shock,
+                               crop_kg=p['crop']*e['cash_yield']*shock,nonlabor_cost=p['grain']*args[2]+p['crop']*args[3],
+                               hired_cost=p['hired']*args[6],agricultural_labor_requirement=p['grain']*args[4]+p['crop']*args[5],
+                               demand_limited=max(0.,rows[k]['demand']-ins))
+                if a.area_kind=='household':
+                    qty,sales=actual_qty[i],actual_sales[i]
+                    a.prior_crops=p['grain'],p['crop']
+                    a.area_prior_transfer=int(ins>1e-7)-int(out>1e-7)
+                    rows[k].update(family_used=last['family'][i],final_cash_shadow=float(last['shadow_cash'][i]),
+                        final_p_down=last['probabilities'][i,0],final_p_hold=last['probabilities'][i,1],
+                        final_p_up=last['probabilities'][i,2],final_choice=int(last['direction'][i]))
             claims[k]=rate*p['eligible']
             if 'transition' in e and a.area_kind=='household':
                 a.prior_crops=p['grain'],p['crop']
@@ -3803,6 +3894,8 @@ class MainModel(Model):
         for a in actors:
             r=rows[a.unique_id]
             surplus=r['sales']-r['input_hire_cost']-r['rent_paid']-r['overhead']+r['rent_received']
+            if v4:
+                surplus-=r['transaction_cost']
             net=surplus+paid[a.unique_id]+a.wage_income
             # Consumption uses available balances; a loss-making organization may exit.
             consumption=min(a.consumption,max(0.,a.balance+net))
@@ -3815,9 +3908,25 @@ class MainModel(Model):
             s=state.setdefault(a.zone,dict(grain_kg=0.,grain_mu=0.,leased_mu=0.,paid=0.))
             for col,val in [('grain_kg',r['grain_kg']),('grain_mu',r['grain']),
                             ('leased_mu',r['rented_in']),('paid',r['paid'])]: s[col]+=val
+            if v4:
+                for key,value in [('physical_mu',r['operated']),('rent_paid',r['rent_paid']),
+                                  ('organization_mu',r['operated'] if a.area_kind!='household' else 0.),
+                                  ('household_income',r['net'] if a.area_kind=='household' else 0.),
+                                  ('households',1 if a.area_kind=='household' else 0)]:
+                    s[key]=s.get(key,0.)+value
         for z,s in state.items():
             s['grain_gap']=e['target'][z]-s['grain_kg']
             s['budget_fraction_national']=s['paid']/annual_budget
+            if v4:
+                s['lease_rate']=s['leased_mu']/max(s['physical_mu'],1e-6)
+                s['average_rent']=s['rent_paid']/s['leased_mu'] if s['leased_mu']>0 else None
+                s['rent_change']=s['average_rent']-previous[z]['average_rent'] if (
+                    s['average_rent'] is not None and previous[z].get('average_rent') is not None) else None
+                s['organization_share']=s['organization_mu']/max(s['physical_mu'],1e-6)
+                s['mean_household_income']=s['household_income']/s['households'] if s['households']>0 else None
         sar.update(next_state=state,reward=sum(s['grain_kg']-previous[z]['grain_kg'] for z,s in state.items()))
+        if v4:
+            sar['budget_remaining']=annual_budget-sum(s['paid'] for s in state.values())
+            sar['action_mask']={a:bool(annual_budget>0 or a==self.government.AREA_ACTIONS[0]) for a in self.government.AREA_ACTIONS}
         e['state']=state
         self.area_last=(list(rows.values()),orders,deals,sar)

@@ -64,10 +64,26 @@ class SubsidyTarget(Enum):
     OPERATOR = "operator"  # 补贴给耕作者
 
 class GovernmentAgent(Agent):
+    # The area-economy baseline never enters this menu without an explicit override.
+    AREA_ACTIONS=('P0_rights_cultivated','scenario_grain_area','scenario_scale_grain',
+                  'scenario_lease','scenario_region_gap','scenario_region_transfer')
+
+    @staticmethod
+    def area_support_basis(action, *, rights_cultivated, grain_sown, leased_in, scale_threshold=80.):
+        if action in ('P0_rights_cultivated','scenario_region_gap','scenario_region_transfer'):
+            return rights_cultivated
+        if action=='scenario_grain_area':
+            return grain_sown
+        if action=='scenario_scale_grain':
+            return grain_sown if grain_sown>=scale_threshold else 0.
+        if action=='scenario_lease':
+            return leased_in
+        raise ValueError(action)
+
     def announce_area_support(self, year, previous, budget, action='P0_rights_cultivated'):
         """Only P0 is commissioned. Other labels are interface tests, not verified local policies."""
         import math
-        if action=='P0_rights_cultivated':
+        if action in GovernmentAgent.AREA_ACTIONS[:4]:
             allocations={}
         elif action in ('scenario_region_gap','scenario_region_transfer'):
             field='grain_gap' if action=='scenario_region_gap' else 'leased_mu'

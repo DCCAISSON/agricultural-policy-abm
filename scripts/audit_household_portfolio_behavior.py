@@ -915,7 +915,295 @@ def audit_soft_response(folder):
     fig.tight_layout();fig.savefig(out/'factorial.png',dpi=160);plt.close(fig)
 
 
-if __name__=="__main__" and __import__('sys').argv[1:2]==['soft-response']:
+def audit_v4(destination):
+    import hashlib
+    import numpy as np
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from scipy.sparse import load_npz
+    from scipy.stats import t
+    from scripts.prepare_nfps_v3 import RAW, MANIFEST, WEIGHTS, clean_area, candidate_cohort
+    import os
+    import shutil
+    d=Path(destination); out=d/'run_01'; private=d/'PRIVATE_DO_NOT_SHARE'
+    household=[]; production=[]; merged=[]; account=[]; receipts=[]; dynamics=[]; region=[]; spatial=[]; effects=[]; channels=[]; manifest=[]
+    frozen=ROOT/'national_crop_choice_soft_response_20261123/PRIVATE_DO_NOT_SHARE/mobility/D/PRIVATE_DO_NOT_SHARE'
+    digest=lambda p:sha256(p.read_bytes()).hexdigest()
+    for a in (private/'M0/PRIVATE_DO_NOT_SHARE').iterdir():
+        assert digest(a)==digest(frozen/a.name),a.name
+        receipts.append(dict(check='M0 to frozen V3',artifact=a.name,sha256=digest(a)))
+    cohort=candidate_cohort()
+    raw=pd.read_csv(RAW,usecols='year id hhid sow_food sow_cash sow_oother sow_total area_e area_b area_in1 area_de2 prod_food'.split(),
+                    dtype={'id':'string','hhid':'string'})
+    clean_area(raw)
+    keys=raw.iloc[cohort.source_row.to_numpy()-2][['id','hhid']].assign(id_model=cohort.cohort_agent_id.to_numpy())
+    benchmark=raw[~raw.duplicated(['year','hhid'],keep=False)].merge(keys,on=['id','hhid'],validate='m:1')
+    expected_cohort=json.loads((private/'M0/inputs.json').read_bytes())['cohort_sha256']
+    for p in sorted(private.iterdir()):
+        if not p.is_dir() or p.name in ('smoke','labor_check'):
+            continue
+        modes={'M0','M1','M2','M3','M4'}
+        name=p.name
+        label=name.split('_')[0] if name.split('_')[0] in modes|{'V4'} else 'sensitivity'
+        b=pd.read_csv(p/'behavior.csv')
+        b['grain_area_error']=abs(b.sim_grain/b.survey_grain-1)
+        b['full_gate']=b.passed&b.grain_area_error.le(.10)
+        b['seed']=b.case.str.split('_').str[0].astype(int)
+        b=b[~b.case.str.contains('repeat')].copy()
+        household.append(b.assign(experiment=name,mode=label))
+        agg=pd.read_csv(p/'structures.csv')
+        production.append(agg[~agg.case.str.contains('repeat')].assign(experiment=name,mode=label))
+        inputs=json.loads((p/'inputs.json').read_bytes())
+        assert inputs['cohort_sha256']==expected_cohort
+        settings=json.loads((p/'settings.json').read_bytes()) if (p/'settings.json').exists() else dict(mode='M0',stage=0)
+        manifest.append(dict(experiment=name,cohort_sha256=expected_cohort,nfps_sha256=inputs['source_sha256'],
+            seeds=' '.join(map(str,sorted(b.seed.unique()))),
+            repeat_103=next((p/'PRIVATE_DO_NOT_SHARE').glob('103_repeat_*_accounts.csv'),None) is not None,
+            settings=json.dumps(settings,ensure_ascii=False,sort_keys=True)))
+        led=p/'PRIVATE_DO_NOT_SHARE'
+        for case in sorted(b.case.unique()):
+            f=pd.read_csv(led/(case+'_accounts.csv'))
+            ls=pd.read_csv(led/(case+'_contracts.csv'))
+            gov=json.loads((led/(case+'_government.json')).read_bytes())
+            orgs=pd.read_csv(led/(case+'_organizations.csv'))
+            orders=pd.read_csv(led/(case+'_orders.csv'))
+            if (led/(case.replace('_both_','_repeat_')+'_accounts.csv')).exists():
+                for ext in ('accounts.csv','orders.csv','contracts.csv','government.json','organizations.csv'):
+                    assert digest(led/(case+'_'+ext))==digest(led/(case.replace('_both_','_repeat_')+'_'+ext)),(name,ext)
+                    receipts.append(dict(check=name+' repeated 103',artifact=ext,sha256=digest(led/(case+'_'+ext))))
+            seed=int(case.split('_')[0])
+            fam=f[f.kind.eq('household')].copy()
+            assert len(fam)==3000 and not fam.duplicated(['year','id']).any()
+            for y,r in f.groupby('year'):
+                d0=ls[ls.start.eq(y)]
+                h=r[r.kind.eq('household')]
+                o=r[~r.kind.eq('household')]
+                casherr=(r.closing-r.opening-r.net+r.consumption).abs().max()
+                surplus=r.sales-r.input_hire_cost-r.rent_paid+r.rent_received-r.overhead-r.get('transaction_cost',0.)
+                assert np.allclose(surplus,r.surplus) and np.allclose(r.net,r.surplus+r.paid+r.nonfarm)
+                assert casherr<1e-6 and np.isclose(r.operated.sum(),r.base_area.sum())
+                assert np.isclose(r.rented_in.sum(),r.rented_out.sum()) and np.isclose(r.rent_paid.sum(),r.rent_received.sum())
+                assert np.isclose(r.rented_in.sum(),d0.area.sum()) and (r.cultivated<=r.operated+1e-7).all()
+                assert (r.rented_out<=r.rights+1e-7).all()
+                if 'preplant_funds' in r:
+                    before=r[r.preplant_funds.notna()]
+                    assert (before.input_hire_cost<=before.preplant_funds+1e-5).all()
+                if 'weather_factor' in r:
+                    for z,a in r[r.weather_factor.notna()].groupby('region'):
+                        rng=np.random.default_rng([seed,int(y),int(z)])
+                        u=rng.random()
+                        factor=(1.-rng.uniform(.05,.10) if u<.05 else 1.+rng.uniform(.0275,.055) if u<.13 else 1.)
+                        assert np.allclose(a.weather_factor,factor)
+                if 'hired_cost' in r:
+                    assert np.allclose(r.hired_cost+r.nonlabor_cost,r.input_hire_cost)
+                    assert np.allclose(h.family_used+h.hired_days,h.agricultural_labor_requirement)
+                    assert (h.family_used<=h.family_capacity+1e-6).all()
+                    assert np.allclose(r.claim,83.*np.minimum(r.cultivated,r.rights-r.rented_out))
+                assert r.paid.sum()<=gov[y-2011]['annual_budget']+1e-6 and gov[y-2011]['training'] is False
+                assert np.allclose(gov[y-2011]['reward'],sum(g['grain_kg']-gov[y-2011]['state'][z]['grain_kg'] for z,g in gov[y-2011]['next_state'].items()))
+                if 'plot' in d0:
+                    span=d0.sort_values(['plot','slice_start'])
+                    assert (span.slice_start>=span.groupby('plot').slice_end.shift().fillna(0)-1e-8).all()
+                    assert np.allclose(span.slice_end-span.slice_start,span.area)
+                    assert (span.slice_end<=span.seller.map(r.set_index('id').rights)+1e-7).all()
+                for z,r1 in r.groupby('region'):
+                    region.append(dict(experiment=name,seed=seed,year=y,region=z,grain_mu=r1.grain.sum(),grain_kg=r1.grain_kg.sum(),
+                        physical_mu=r1.operated.sum(),leased_in=r1.rented_in.sum(),paid=r1.paid.sum()))
+                a=dict(experiment=name,seed=seed,year=y,area_error=abs(r.operated.sum()-r.base_area.sum()),
+                    rent_error=abs(r.rent_paid.sum()-r.rent_received.sum()),cash_error=casherr,
+                    hired_days=h.hired_days.sum(),family_days=h.family_used.sum() if 'family_used' in h else None,
+                    grain_kg=h.grain_kg.sum(),crop_kg=h.crop_kg.sum() if 'crop_kg' in h else None,
+                    ag_net_excluding_rent_and_aid=(h.sales-h.input_hire_cost).sum(),offfarm=h.nonfarm.sum(),
+                    net_income=h.net.sum(),rent_received=h.rent_received.sum(),rent_paid=h.rent_paid.sum(),
+                    org_area=o.operated.sum(),org_grain_kg=o.grain_kg.sum(),org_labor=o.hired_days.sum(),
+                    org_rent=o.rent_paid.sum(),org_operating_surplus=o.surplus.sum(),org_exits=o.exited.sum(),
+                    org_initial_capital=orgs.capital.sum(),organization_desired=int(o.demand.gt(0).sum()),
+                    organization_orders=int((orders.year.eq(y)&orders.side.eq('buy')&orders.id.isin(o.id)).sum()),
+                    organization_no_bid_overhead=int(o.bid_rejected_overhead.sum()) if 'bid_rejected_overhead' in o else 0,
+                    org_fixed_cost=orgs.fixed.sum(),org_management_cost=orgs.management.sum(),
+                    government_spent=r.paid.sum(),transactions=len(d0),sown_intensity=(h.grain+h.crop).sum()/h.operated.sum())
+                account.append(a)
+            matched=benchmark.merge(fam,left_on=['year','id_model'],right_on=['year','id'],validate='1:1')
+            # Only output aggregate comparisons; household trace remains in the private directory.
+            for y,r in matched.groupby('year'):
+                positive=r.sow_food+r.sow_cash>0
+                gp=r.grain+r.crop>1e-7
+                merged.append(dict(experiment=name,seed=seed,year=y,match=len(r),survey_all=int(r.sow_total.gt(0).sum()),
+                    survey_other_only=int(((r.sow_food+r.sow_cash==0)&r.sow_oother.gt(0)).sum()),
+                    survey_only_grain=int((r.sow_food.gt(0)&r.sow_cash.eq(0)).sum()),
+                    survey_only_cash=int((r.sow_food.eq(0)&r.sow_cash.gt(0)).sum()),
+                    sim_only_grain=int((r.grain.gt(1e-7)&r.crop.le(1e-7)).sum()),sim_only_cash=int((r.grain.le(1e-7)&r.crop.gt(1e-7)).sum()),
+                    survey_cash_mu=r.sow_cash.sum(),survey_other_mu=r.sow_oother.sum(),survey_sow_total_mu=r.sow_total.sum(),
+                    survey_both_planted_n=int((positive&gp).sum()),sim_cash_mu=r.crop.sum(),
+                    survey_intensity_all=(r.sow_total/r.area_e.where(r.area_e.gt(0))).median(),
+                    model_intensity_two_crops=((r.grain+r.crop)/r.operated.where(r.operated.gt(0))).median(),
+                    observed_exit_n=int((r.area_b.gt(0)&r.area_e.eq(0)).sum()),
+                    observed_both_ends_n=int((r.area_b.notna()&r.area_e.notna()).sum()),sim_zero_operated_n=int(r.operated.le(1e-7).sum())))
+                s=r.set_index('id_model')
+                prev=benchmark[benchmark.year.eq(y-1)].set_index('id_model')
+                c=s[['sow_food','sow_cash','grain','crop']].join(prev[['sow_food','sow_cash']],rsuffix='_lag',how='inner')
+                simprev=fam[fam.year.eq(y-1)].set_index('id')[['grain','crop']] if y>2011 else prev[['sow_food','sow_cash']].set_axis(['grain','crop'],axis=1)
+                c=c.join(simprev,rsuffix='_lag',how='inner')
+                for v,cols in [('observed',('sow_food','sow_cash')),('simulated',('grain','crop'))]:
+                    g,k=cols
+                    ss=c[g]/(c[g]+c[k]).where(c[g]+c[k]>1e-7)
+                    s0=c[g+'_lag']/(c[g+'_lag']+c[k+'_lag']).where(c[g+'_lag']+c[k+'_lag']>1e-7)
+                    dx=(ss-s0).dropna()
+                    for tag,xx in [('up',dx[dx>1e-7]),('hold',dx[dx.abs()<=1e-7]),('down',dx[dx< -1e-7])]:
+                        dynamics.append(dict(experiment=name,seed=seed,year=y,series=v,direction=tag,n=len(xx),
+                            conditional_denom=len(dx),change_mean=xx.mean(),abs_change_median=xx.abs().median(),
+                            p25=xx.quantile(.25),p75=xx.quantile(.75)))
+            if (led/(case+'_neighbors.npz')).exists():
+                w=load_npz(led/(case+'_neighbors.npz'))
+                meta=json.loads((led/(case+'_space.json')).read_bytes())
+                coord=np.array(list(meta['coordinates'].values()))
+                ii,jj=w.nonzero()
+                assert np.array_equal(coord[ii,0],coord[jj,0])
+                assert (abs(coord[ii,1:]-coord[jj,1:]).max(axis=1)<=1).all()
+                assert w.diagonal().sum()==0 and np.diff(w.indptr).max()<=8
+                spatial.append(dict(experiment=name,seed=seed,plots=w.shape[0],edges=w.nnz,max_neighbors=np.diff(w.indptr).max(),
+                    synthetic=meta['synthetic'],matrix_sha256=hashlib.sha256(w.indptr.tobytes()+w.indices.tobytes()).hexdigest(),
+                    fee_paid=(ls.area*ls.search_fee).sum(),count=len(ls)))
+                if name=='M4':
+                    for yr,r in f.groupby('year'):
+                        c=ls[ls.start.eq(yr)]
+                        borrowed=c.groupby('seller').area.sum()
+                        owner=pd.DataFrame(dict(plot=list(meta['areas']),physical_mu=list(meta['areas'].values())))
+                        owner['physical_mu']-=owner['plot'].map(borrowed).fillna(0.)
+                        owner['operator']=owner['plot']
+                        holding=pd.concat([owner,c.rename(columns={'buyer':'operator','area':'physical_mu'})[list(owner)]],ignore_index=True)
+                        holding=holding[holding.physical_mu>1e-8]
+                        holding=holding.merge(r[['id','operated','grain','crop','grain_kg','crop_kg','cultivated']],
+                                              left_on='operator',right_on='id',validate='m:1')
+                        for var in ('grain','crop','grain_kg','crop_kg','cultivated'):
+                            total=holding[var]*holding.physical_mu/holding.operated
+                            assert np.isclose(total.sum(),r[var].sum())
+                            holding[var]=total
+                        holding.drop(columns=['id','operated']).to_csv(private/f'accounting_plot_allocation_{seed}_{yr}.csv',index=False)
+    a,b=private/'M4/PRIVATE_DO_NOT_SHARE',private/'scalar/PRIVATE_DO_NOT_SHARE'
+    for ext in ('accounts.csv','orders.csv','contracts.csv'):
+        x=pd.read_csv(a/('103_both_60_1.0_'+ext));y=pd.read_csv(b/('103_both_60_1.0_'+ext))
+        pd.testing.assert_frame_equal(x,y,rtol=1e-8,atol=1e-7)
+        receipts.append(dict(check='vectorized vs scalar; identical actions and numerically equal accounts',artifact=ext,sha256=digest(a/('103_both_60_1.0_'+ext))))
+    beh=pd.concat(household,ignore_index=True)
+    ard=pd.DataFrame(account)
+    pr=pd.concat(production,ignore_index=True)
+    assert len(manifest)==35 and len(ard)==465
+    assert pd.DataFrame(spatial).matrix_sha256.nunique()==1
+    for file,data in [('behavior',beh),('production_and_land',pr),('accounts_summary',ard),('crop_states',pd.DataFrame(merged)),
+                      ('transitions',pd.DataFrame(dynamics)),('regional',pd.DataFrame(region)),('space',pd.DataFrame(spatial)),
+                      ('reproduction_receipts',pd.DataFrame(receipts)),('experiment_manifest',pd.DataFrame(manifest))]:
+        data.to_csv(out/(file+'.csv'),index=False)
+    long=pr[(pr.seed>=201)&pr['mode'].isin(['M0','V4'])&pr.kind.isin(['household','organization','all'])]
+    metrics=['operated','cultivated','rented_in','grain','crop','grain_kg','net','paid','hired_days']
+    for (year,kind),s in long.groupby(['year','kind']):
+        for metric in metrics:
+            p=s.pivot(index='seed',columns='mode',values=metric)
+            assert len(p)==20 and p.notna().all().all()
+            comparisons={'M0':p.M0,'V4':p.V4,'V4 - M0':p.V4-p.M0}
+            for label,x in comparisons.items():
+                se=x.std(ddof=1)/np.sqrt(len(x))
+                effects.append(dict(kind=kind,year=year,metric=metric,comparison=label,n=len(x),mean=x.mean(),
+                    std=x.std(ddof=1),median=x.median(),p05=x.quantile(.05),p95=x.quantile(.95),
+                    mean_ci95_lower=x.mean()-t.ppf(.975,len(x)-1)*se,mean_ci95_upper=x.mean()+t.ppf(.975,len(x)-1)*se))
+    pd.DataFrame(effects).to_csv(out/'paired_seeds.csv',index=False)
+    sens=[]
+    for name in ard.experiment.unique():
+        if name in ['M0','M1','M2','M3','M4','scalar'] or name.startswith(('M0_','V4_')):
+            continue
+        for seed in (103,109):
+            root=private/name/'PRIVATE_DO_NOT_SHARE'; ref=private/'M4/PRIVATE_DO_NOT_SHARE'
+            case=next(x for x in root.glob(f'{seed}_both_*_accounts.csv'))
+            h=pd.read_csv(case).query("kind=='household'").set_index(['year','id'])
+            b=pd.read_csv(ref/(f'{seed}_both_60_1.0_accounts.csv')).query("kind=='household'").set_index(['year','id'])
+            settings=json.loads((private/name/'settings.json').read_bytes())
+            for y in range(2011,2016):
+                a=h.loc[y]; r=b.loc[y]
+                response=a.grain-r.grain
+                elasticity={}
+                for key in ('grain','cash','wage','rent','cash_funds'):
+                    if settings.get(key,0.): elasticity[f'area_response_per_{key}_change']=response.sum()/r.grain.sum()/settings[key]
+                sens.append(dict(experiment=name,seed=seed,year=y,reference_grain_mu=r.grain.sum(),delta_grain_mu=response.sum(),
+                    more=int(response.gt(1e-7).sum()),less=int(response.lt(-1e-7).sum()),n=len(response),
+                    delta_rent_area=(a.rented_in-r.rented_in).sum(),delta_employed_hired_days=(a.hired_days-r.hired_days).sum(),
+                    **elasticity))
+    for seed in (103,109):
+        nm=f'{seed}_both_60_1.0_accounts.csv'
+        a=pd.read_csv(private/'M0/PRIVATE_DO_NOT_SHARE'/nm).query("kind=='household'").set_index(['year','id'])
+        b=pd.read_csv(private/'M4/PRIVATE_DO_NOT_SHARE'/nm).query("kind=='household'").set_index(['year','id'])
+        for year in range(2011,2016):
+            x,y=a.loc[year],b.loc[year]
+            area_x=x.grain+x.crop;area_y=y.grain+y.crop
+            both=area_x.gt(1e-7)&area_y.gt(1e-7)
+            sx=x.grain[both]/area_x[both];sy=y.grain[both]/area_y[both]
+            entry=y.grain[~both].sum()-x.grain[~both].sum()
+            size=((area_y[both]-area_x[both])*(sx+sy)/2).sum()
+            mix=((sy-sx)*(area_y[both]+area_x[both])/2).sum()
+            assert np.isclose(entry+size+mix,y.grain.sum()-x.grain.sum())
+            channels.append(dict(seed=seed,year=year,entry_exit=entry,sown_scale=size,within_mix=mix,
+                                 total=entry+size+mix,common_positive=int(both.sum())))
+    pd.DataFrame(channels).to_csv(out/'grain_channels.csv',index=False)
+    pd.DataFrame(sens).to_csv(out/'sensitivity.csv',index=False)
+    # Published inputs are identifiable but do not contain source IDs or invocation paths.
+    project=ROOT.parents[1]
+    cf=next((RAW.parents[1]/'CFPS/2010').rglob('cfps2010adult*.dta'))
+    sources=[RAW,RAW.parent/'2009-2015individual.csv',RAW.parent/'household variables2009-2015.xlsx',
+        RAW.parent/'individual variables2009-2015.xlsx',RAW.parent/'2009-2017农户调查问卷.txt',
+        WEIGHTS,MANIFEST,cf,project/'config/experiments/national_real2024_cpi_20260909.csv',
+        project/'results/national_crop_budget_basis_20261118/run_04/real2024_revision/record_selection_money2024.csv']
+    chfs=os.environ.get('AP_ABM_CHFS2011')
+    if chfs: sources.append(Path(chfs))
+    pd.DataFrame([dict(file=p.name,sha256=digest(p)) for p in sources]).to_csv(out/'source_manifest.csv',index=False)
+    source=private/'M4'
+    for name in ('field_mapping','behavior_parameters','adjustment_distribution','labor_parameters',
+                 'liquidity_parameters','production_parameters','cash_budget_ranges','initial_coverage'):
+        if (source/(name+'.csv')).exists():
+            shutil.copyfile(source/(name+'.csv'),out/(name+'.csv'))
+    is_v3=ROOT/'national_crop_choice_soft_response_20261123/run_01'
+    for name in ('cohort_margins','cohort_distance','selection'):
+        shutil.copyfile(is_v3/(name+'.csv'),out/(name+'.csv'))
+    gov=ard[ard.experiment.eq('M4')][['seed','year','government_spent']].copy()
+    gov['training']=False; gov['gate_passed']=bool(beh[beh.experiment.eq('M4')].full_gate.all())
+    gov.to_csv(out/'government_gate.csv',index=False)
+    fig,axes=plt.subplots(1,2,figsize=(10,3.8))
+    for mode in ['M0','M1','M2','M3','M4']:
+        s=beh[beh.experiment.eq(mode)].groupby('year')[['grain_area_error','mixed_error','share_mae']].mean()
+        axes[0].plot(s.index,s.grain_area_error,marker='o',label=mode)
+        axes[1].plot(s.index,s.mixed_error,marker='o',label=mode)
+    for x,label in zip(axes,['Grain area relative error','Mixed-household share error']):
+        x.axhline(.10,color='#555555',linestyle=':');x.set(xticks=range(2011,2016),ylabel=label);x.legend()
+    fig.tight_layout();fig.savefig(out/'behavior.png',dpi=160);plt.close(fig)
+    meta=json.loads((private/'M4/PRIVATE_DO_NOT_SHARE/103_both_60_1.0_space.json').read_bytes())
+    ls=pd.read_csv(private/'M4/PRIVATE_DO_NOT_SHARE/103_both_60_1.0_contracts.csv')
+    zone=int(ls.region.value_counts().idxmax())
+    operator=pd.read_csv(private/'accounting_plot_allocation_103_2015.csv')
+    cells={a:(x//3,y//3) for a,(z,x,y) in meta['coordinates'].items() if z==zone}
+    counts=Counter(cells.values())
+    cells={a:c for a,c in cells.items() if counts[c]>=3}
+    operator['cell']=operator['plot'].map(cells)
+    by=operator.dropna(subset=['cell']).groupby('cell')[['grain','crop']].sum()
+    ratio=by.grain/(by.grain+by.crop).where(by.grain+by.crop>1e-7)
+    fig,ax=plt.subplots(figsize=(6,5))
+    xx,yy=np.array(list(by.index)).T
+    im=ax.scatter(xx,yy,c=ratio.fillna(0.),cmap='YlGn',vmin=0,vmax=1,s=360,marker='s',edgecolor='#35516b')
+    links=Counter()
+    for d0 in ls[(ls.region.eq(zone))&ls.start.eq(2015)].itertuples():
+        a,b=cells.get(str(d0.seller)),cells.get(meta['anchors'][str(d0.buyer)])
+        if a is not None and b is not None and a!=b: links[a,b]+=1
+    for (a,b),n in links.items():
+        ax.annotate('',xy=b,xytext=a,arrowprops=dict(arrowstyle='->',color='#28659b',lw=.8+.2*n,alpha=.65))
+    cb=fig.colorbar(im,ax=ax);cb.set_label('Grain share (zero or idle at left)')
+    ax.set(title='Synthetic leases, 2015 (seed 103)',xlabel='Grouped grid column',
+           ylabel='Grid row',aspect='equal')
+    fig.tight_layout();fig.savefig(out/'space.png',dpi=160);plt.close(fig)
+    print('Audited',len(ard),'seed-years; exact M0 and scalar checks passed')
+
+
+if __name__=="__main__" and __import__('sys').argv[1:2]==['audit-v4']:
+    import sys
+    audit_v4(sys.argv[2])
+elif __name__=="__main__" and __import__('sys').argv[1:2]==['soft-response']:
     import sys
     audit_soft_response(sys.argv[2])
 elif __name__=="__main__" and __import__('sys').argv[1:2]==['crop-mix']:

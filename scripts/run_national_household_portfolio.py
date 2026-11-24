@@ -246,7 +246,7 @@ def estimate_crop_transitions(raw_file, excluded, continuous=False, end_year=201
     return pd.DataFrame(rows)
 
 
-def run_area_structures(destination, mix_mode=None):
+def run_area_structures(destination, mix_mode=None, *, settings=None):
     """One entry for paired, fixed-policy structural comparisons. Private rows stay local."""
     import json
     import hashlib
@@ -255,6 +255,8 @@ def run_area_structures(destination, mix_mode=None):
     from scripts.prepare_household_portfolio_reference import RAW, MANIFEST
     from core.extract_microdata_features import REGION_MAPPING
     dest=Path(destination)
+    settings=settings or {}
+    stage=settings.get('stage',0)
     dest.mkdir(parents=True,exist_ok=False)
     private=dest/'PRIVATE_DO_NOT_SHARE'
     private.mkdir()
@@ -274,6 +276,7 @@ def run_area_structures(destination, mix_mode=None):
         if calibrated: cohort=candidate
     rates,workers,ratios,refs=v1_household_inputs(cohort)
     cols='year hhid id smgen hhnumbers area_e area_e1 area_in1 area_de2 sow_food sow_cash sow_total prod_food saving_1 saving_2 inc_wage_l inc_wage_o'.split()
+    if stage: cols+=['sow_oother','area_b','area_b1']
     dictionary=pd.read_excel(RAW.parent/'household variables2009-2015.xlsx',header=None)
     dictionary[dictionary[0].isin(cols+['hhlabornum','prod_food'])].to_csv(dest/'survey_dictionary.csv',index=False)
     raw=pd.read_csv(RAW,usecols=cols,dtype={'hhid':'string','id':'string'})
@@ -323,12 +326,37 @@ def run_area_structures(destination, mix_mode=None):
                cash_sale,*[req['other_cost_per_mu'][t] for t in ('grain','cash_crop')],
                *[req['labor_days'][t] for t in ('grain','cash_crop')]) for z,y in yield_map.items()}
     base=b.set_index('actor')
+    if stage:
+        from scripts.prepare_nfps_v3 import prepare_v4_inputs
+        import os
+        fitted,profiles=prepare_v4_inputs(cohort,dest,deflator,os.environ.get('AP_ABM_CHFS2011'))
+        paired=sell[sell.output.gt(0)&sell.sales_quantity.between(0,sell.output)&sell.labor.gt(0)&sell.nonlabor_low.ge(0)].copy()
+        paired['sale2024']=paired.sales_amount*paired.to_2024
+        paired['mech2024']=paired.machinery*paired.to_2024
+        paired['unit_margin']=(paired.sale2024-paired.nonlabor_low)/paired.area
+        paired['band']=np.minimum(2,(paired.unit_margin.rank(method='first',pct=True)*3-1e-8).astype(int))
+        budgets={}
+        for band,tab in paired.groupby('band'):
+            aa=tab.area.sum()
+            budgets[['low','mid','high'][band]]=dict(n=len(tab),unit_sale=tab.sale2024.sum()/aa,
+                unit_input=tab.nonlabor_low.sum()/aa,unit_labor=tab.labor.sum()/aa,
+                unit_output=tab.output.sum()/aa,unit_mechanical=tab.mech2024.sum(min_count=1)/tab.loc[tab.mech2024.notna(),'area'].sum(),
+                sold_fraction=tab.sales_quantity.sum()/tab.output.sum(),cpi_area_mean=(tab.area*tab.to_2024).sum()/aa)
+        pd.DataFrame(budgets).T.to_csv(dest/'cash_budget_ranges.csv')
+        selected_budget=budgets.get(settings.get('budget','frozen'))
+        if selected_budget:
+            inputs={z:(r[0],selected_budget['unit_sale'],r[2],selected_budget['unit_input'],r[4],selected_budget['unit_labor']) for z,r in inputs.items()}
+        cash_yield=(selected_budget or dict(unit_output=paired.output.sum()/paired.area.sum()))['unit_output']
+        inputs={z:tuple(c*(1.+settings.get(k,0.)) for k,c in zip(('grain','cash','fixed','fixed','fixed','fixed'),s)) for z,s in inputs.items()}
+        if settings.get('rights',False):
+            # The opening contracted-area report is only an alternative source in this scenario.
+            base['verified_right']=base.area_e1.fillna(base.area_b1.where(base.area_b1.between(0,base.area_e))).fillna(0.)
     transition=None
     history=None
     if mix_mode in ('continuous','C'):
         history=estimate_crop_transitions(RAW,set(original.hhid.dropna()),continuous=True)
         transition={}
-    if soft:
+    if soft and not stage:
         excluded=set(original.hhid)|set(raw.iloc[candidate.source_row.to_numpy()-2].hhid)
         pairs=[];annual={}
         for yr in (2010,2011,2012):
@@ -367,7 +395,7 @@ def run_area_structures(destination, mix_mode=None):
     survey=pd.concat(survey)
     b.drop(columns=['hhid','id']).to_csv(private/'baseline.csv',index=False)
     results=[]; checks=[]; fingerprints=[]
-    for seed in (103,109):
+    for seed in settings.get('seeds',(103,109)):
         model=legacy.build_model(cfg,econ,seed)
         families=list(model.initial_household_cohort)
         orgs=list(model.agricultural_enterprises)
@@ -376,8 +404,9 @@ def run_area_structures(destination, mix_mode=None):
                ('both',30,1.),('both',90,1.),('both',60,.5),('both',60,1.5)]
         if seed==103: cases.append(('repeat',60,1.))
         if mix_mode:
-            cases=[('both',60,1.)]
-            if (mix_mode in ('candidate','continuous') or factorial) and seed==103: cases.append(('repeat',60,1.))
+            cases=[('both',settings.get('organizations',60),1.)]
+            if (mix_mode in ('candidate','continuous') or factorial) and seed==103 and settings.get('repeat',True):
+                cases.append(('repeat',settings.get('organizations',60),1.))
         for structure,n,supply in cases:
             name=f'{seed}_{structure}_{n}_{supply}'
             actors=[]
@@ -386,9 +415,19 @@ def run_area_structures(destination, mix_mode=None):
                 if calibrated: a.household_size=int(base.loc[a.unique_id,'hhnumbers'])
                 a.set_v1_labor(count,paid)
                 a.initialize_area_household(base.loc[a.unique_id])
-                if transition is not None:
+                if transition is not None or stage:
                     row=base.loc[a.unique_id]
                     a.prior_crops=(row.sow_food,row.sow_cash)
+                if stage:
+                    profile=profiles.loc[a.unique_id]
+                    a.area_prior_transfer=int(profile.flow)
+                    yy=float(profile.grain_yield)
+                    a.area_grain_yield=yy if np.isfinite(yy) and yy>0 else yield_map[a.zone]
+                    if stage>=2 and np.isfinite(profile.labor):
+                        a.family_days=float(profile.labor)
+                    if stage>=2 and np.isfinite(profile.initial_liquidity):
+                        a.balance=float(profile.initial_liquidity)
+                    a.balance*=1.+settings.get('cash_funds',0.)
                 actors.append(a)
             roster=[]
             for kind,prob in [('AGRI_CORPORATION',.6),('COOPERATIVE',.4)]:
@@ -404,6 +443,7 @@ def run_area_structures(destination, mix_mode=None):
                     index=j+(0 if kind=='AGRI_CORPORATION' else round(n*.6))
                     a=orgs[index]
                     cap=600000.*prob*w
+                    if stage: cap*=settings.get('capital',1.)
                     limit=600.*prob*w*supply
                     a.initialize_area_business(kind,z,cap,limit)
                     active=structure in ('both','repeat') or (structure=='company' and kind=='AGRI_CORPORATION') or (structure=='coop' and kind=='COOPERATIVE')
@@ -418,11 +458,26 @@ def run_area_structures(destination, mix_mode=None):
                 rents={z:cfg['environment']['market']['base_land_rent'] for z in zones},
                 state={z:dict(grain_kg=q,grain_gap=0.,grain_mu=float(b.loc[b.smgen==z,'sow_food'].sum()),
                               leased_mu=None,paid=None,budget_fraction_national=None) for z,q in target.items()})
+            if stage:
+                model.area_economy.update(v4=stage,v4_fit=fitted,macro_region=geo,
+                    wage=model.area_economy['wage']*(1.+settings.get('wage',0.)),
+                    rent_shift=settings.get('rent',0.),incentive=settings.get('incentive',1.),
+                    scalar_reference=settings.get('scalar',False),cash_yield=cash_yield)
+                if stage>=4:
+                    from modules.spatial_index import area_moore_neighbors
+                    space=area_moore_neighbors(actors)
+                    space.update(search=settings.get('space',True),fee=.05*cfg['environment']['market']['base_land_rent'])
+                    model.area_economy['v4_space']=space
+                    old.write(private/(name+'_space.json'),dict(synthetic=True,coordinates=space['coordinates'],areas=space['area'],
+                         rights=space['rights'],anchors=space['anchors'],zone=space['zone'],
+                         edges=int(space['neighbors'].nnz)))
+                    from scipy.sparse import save_npz
+                    save_npz(private/(name+'_neighbors.npz'),space['neighbors'])
             logs=[];contracts=[];offers=[];sars=[]
             if transition is not None: model.area_economy['transition']=transition
             if history is not None: model.area_economy['continuous_crop_history']=history
             for yr in range(2011,2016):
-                if soft:
+                if soft and not stage:
                     model.area_economy.update(regional_history=annual[min(2012,yr-1)],macro_region=geo,crop_penalty=penalty)
                     if penalties is not None:model.area_economy['actor_crop_penalty']=penalties
                 model.step()
@@ -465,6 +520,13 @@ def run_area_structures(destination, mix_mode=None):
                     sim_share_p25=sim.iloc[0],sim_share_median=sim.iloc[1],sim_share_p75=sim.iloc[2],
                     cash_binding=(linked.cash_shadow>1e-7).mean(),mixed_error=error,share_mae=mae,
                     passed=bool(error<=.10 and mae<=.15)))
+                if stage:
+                    checks[-1].update(survey_grain_only=int(((G>0)&(C==0)).sum()),survey_cash_only=int(((G==0)&(C>0)).sum()),
+                        survey_other_only=int(((G+C==0)&linked.sow_oother.gt(0)).sum()),
+                        sim_grain_only=int(((g>1e-7)&(c<=1e-7)).sum()),sim_cash_only=int(((g<=1e-7)&(c>1e-7)).sum()),
+                        grain_area_error=float(abs(g.sum()-G.sum())/G.sum()),survey_cash=float(C.sum()),sim_cash=float(c.sum()),
+                        survey_all_sown=float(linked.sow_total.sum()),survey_other_sown=float(linked.sow_oother.sum()),
+                        full_gate=bool(error<=.10 and mae<=.15 and abs(g.sum()-G.sum())/G.sum()<=.10))
             df=pd.concat(logs)
             df.to_csv(private/(name+'_accounts.csv'),index=False)
             pd.DataFrame(contracts).to_csv(private/(name+'_contracts.csv'),index=False)
@@ -480,16 +542,66 @@ def run_area_structures(destination, mix_mode=None):
             pd.DataFrame(checks).to_csv(dest/'behavior.csv',index=False)
     fp=pd.DataFrame(fingerprints).set_index('case')
     if mix_mode!='baseline':
-        assert fp.loc['103_both_60_1.0','accounts']==fp.loc['103_repeat_60_1.0','accounts']
+        for name in fp.index[fp.index.str.contains('_repeat_')]:
+            assert fp.loc[name.replace('_repeat_','_both_'),'accounts']==fp.loc[name,'accounts']
     fp.to_csv(dest/'fingerprints.csv')
-    if soft: pd.DataFrame([dict(last_year=y,prior=s,region=z,n=len(v[0]),positive=int(np.isfinite(v[1]).sum()),penalty=penalty)
+    if soft and not stage: pd.DataFrame([dict(last_year=y,prior=s,region=z,n=len(v[0]),positive=int(np.isfinite(v[1]).sum()),penalty=penalty)
             for y,h in annual.items() for z,r in h.items() for s,v in r.items()]).to_csv(dest/'fit.csv',index=False)
     old.write(dest/'inputs.json',dict(references=refs,cash_sale=cash_sale,cash_sale_n=len(sell),deflator=deflator,
             source_sha256=old.digest(RAW),cohort_sha256=(hashlib.sha256(cohort.to_json(orient='records',force_ascii=False).encode()).hexdigest() if calibrated else job['cohort_sha256']),unverified_rights=int(b.area_e1.isna().sum()),
             positive_intensity_proxy=int(b.intensity_proxy.sum()),other_sown_gap_mu=float((b.sow_total-b.sow_food-b.sow_cash).sum())))
+    if settings: old.write(dest/'settings.json',settings)
 
 
-if __name__ == "__main__" and __import__('sys').argv[1:2]==['crop-mix']:
+def run_v4_suite(destination, workers):
+    """Reproduce the published matrix through this module, then audit saved accounts."""
+    from concurrent.futures import ThreadPoolExecutor
+    import subprocess
+    import sys
+    dst=Path(destination)
+    root=dst/'PRIVATE_DO_NOT_SHARE'
+    root.mkdir(parents=True,exist_ok=False)
+    (dst/'run_01').mkdir()
+    tests=old.read(old.ROOT/'results/diagnostics/national_crop_mix_repair_20261123/run_01/run_manifest.json')
+    t=[arg for arg in tests['tests_command'].split() if arg.startswith('tests/')]
+    subprocess.run([sys.executable,'-B','-X','utf8','-m','pytest','-q',*t,
+        'tests/test_continuous_crop_history.py','tests/test_v3_crop_response.py','tests/test_v4_area_economy.py',
+        f'--junitxml={dst/"run_01"/"tests.xml"}'],check=True)
+    suite=[(f'M{k}',f'M{k}',[]) for k in range(5)]
+    for lo in range(201,221,5):
+        for mode in ('M0','V4'):
+            suite.append((mode,f'{mode}_{lo}',['--no-repeat','--seeds',*map(str,range(lo,lo+5))]))
+    sens=[('scalar',['--scalar']),('nospatial',['--no-space']),('rights',['--rights']),
+          ('org30',['--organizations','30']),('org90',['--organizations','90']),
+          ('caplow',['--capital','0.5']),('caphigh',['--capital','1.5']),
+          ('incentivelow',['--incentive','0.5']),('incentivehigh',['--incentive','2.0'])]
+    for field in ('grain','cash','wage','rent','cash-funds'):
+        for tag,delta in [('low','-0.1'),('high','0.1')]: sens.append((field+tag,['--'+field,delta]))
+    for tier in ('low','mid','high'):
+        sens.append(('budget_'+tier,['--budget',tier]))
+    for name,args in sens:
+        suite.append(('V4',name,['--no-repeat','--seeds',*(['103'] if name=='scalar' else ['103','109']),*args]))
+
+    def run(row):
+        mode,name,args=row
+        with (root/(name+'.log')).open('w',encoding='utf-8') as log:
+            subprocess.run([sys.executable,'-B','-X','utf8','-m','scripts.run_national_household_portfolio',
+                            'v4',mode,str(root/name),*args],stdout=log,stderr=subprocess.STDOUT,check=True)
+        print(name,'complete',flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(run,suite))
+    from scripts.audit_household_portfolio_behavior import audit_v4
+    audit_v4(dst)
+
+
+if __name__ == "__main__" and __import__('sys').argv[1:2]==['v4-suite']:
+    import sys
+    p=argparse.ArgumentParser()
+    p.add_argument('destination')
+    p.add_argument('--workers',type=int,default=5)
+    ns=p.parse_args(sys.argv[2:])
+    run_v4_suite(ns.destination,ns.workers)
+elif __name__ == "__main__" and __import__('sys').argv[1:2]==['crop-mix']:
     import sys
     if len(sys.argv)!=4 or sys.argv[2] not in ('baseline','candidate','continuous','B','Bmid','Blow','Bhigh','C','D','Dmid','Dlow','Dhigh'):
         raise SystemExit('crop-mix baseline|candidate|continuous|B|Bmid|Blow|Bhigh|C|D|Dmid|Dlow|Dhigh NEW_DIRECTORY')
@@ -497,6 +609,25 @@ if __name__ == "__main__" and __import__('sys').argv[1:2]==['crop-mix']:
 elif __name__ == "__main__" and __import__('sys').argv[1:2]==['area']:
     import sys
     run_area_structures(sys.argv[2])
+elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
+    import sys
+    p=argparse.ArgumentParser(description='One annual model for all frozen V4 comparisons')
+    p.add_argument('mode',choices=['M0','M1','M2','M3','M4','V4'])
+    p.add_argument('destination')
+    p.add_argument('--seeds',type=int,nargs='+',default=[103,109])
+    p.add_argument('--no-repeat',dest='repeat',action='store_false')
+    p.add_argument('--scalar',action='store_true')
+    p.add_argument('--no-space',dest='space',action='store_false')
+    p.add_argument('--rights',action='store_true')
+    p.add_argument('--organizations',type=int,choices=(30,60,90),default=60)
+    p.add_argument('--capital',type=float,default=1.)
+    p.add_argument('--incentive',type=float,default=1.)
+    p.add_argument('--budget',choices=['frozen','low','mid','high'],default='frozen')
+    for x in ('grain','cash','wage','rent','cash-funds'): p.add_argument('--'+x,type=float,default=0.)
+    v=vars(p.parse_args(sys.argv[2:]))
+    v['stage']=4 if v['mode']=='V4' else int(v['mode'][1])
+    dest=v.pop('destination')
+    run_area_structures(dest,'D',settings=v)
 elif __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("seed", type=int, choices=(103,109))

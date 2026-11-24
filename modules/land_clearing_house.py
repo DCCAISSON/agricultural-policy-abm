@@ -2345,7 +2345,7 @@ class LandClearingHouse:
         if patch_a not in farmer_b.land_patches:
             farmer_b.land_patches.append(patch_a)
     @staticmethod
-    def clear_area_orders(orders, year, term):
+    def clear_area_orders(orders, year, term, *, space=None):
         """Uniform marginal midpoint per region; quantities are divisible physical mu."""
         from collections import defaultdict
         groups = defaultdict(list)
@@ -2357,6 +2357,47 @@ class LandClearingHouse:
             sellers = sorted((o for o in group if o['side']=='sell'),key=lambda o:(o['price'],o['id']))
             buyers = sorted((o for o in group if o['side']=='buy'),key=lambda o:(-o['price'],o['id']))
             if not buyers or not sellers:
+                continue
+            if space is not None:
+                # Candidate edges are produced in one sparse slice; conflict resolution
+                # preserves the existing protected ask/bid and regional rent constraints.
+                ix=space['index']; anchor=space['anchors']
+                si=[ix[o['id']] for o in sellers]
+                bi=[ix.get(anchor.get(o['id']),-1) for o in buyers]
+                w=space['neighbors']
+                sr=[s['quantity'] for s in sellers]
+                lower,upper=0.,float('inf')
+                local=[]
+                for j,buyer in enumerate(buyers):
+                    if bi[j]<0:
+                        continue
+                    if space.get('search',True):
+                        connect=w[bi[j],si]
+                        mask=set(connect.indices)
+                        mask.update(i for i,a in enumerate(si) if a==bi[j])
+                    else:
+                        mask=range(len(sellers))
+                    available=buyer['quantity']
+                    for i in sorted(mask):
+                        seller=sellers[i]
+                        _,bx,by=space['coordinates'][anchor[buyer['id']]]
+                        _,sx,sy=space['coordinates'][seller['id']]
+                        fee=space.get('fee',0.) if space.get('search',True) and abs(bx-sx)+abs(by-sy)>1 else 0.
+                        if available<=1e-8:
+                            break
+                        ask,bid=seller['price'],buyer['price']-fee
+                        if sr[i]<=1e-8 or seller['id']==buyer['id'] or max(lower,ask)>min(upper,bid):
+                            continue
+                        q=min(sr[i],available)
+                        base=seller['quantity']-sr[i]
+                        local.append(dict(region=region,seller=seller['id'],buyer=buyer['id'],area=q,
+                            ask=ask,bid=bid,start=year,end=year+term-1,plot=seller['id'],
+                            slice_start=base,slice_end=base+q,search_fee=fee))
+                        sr[i]-=q;available-=q
+                        lower,upper=max(lower,ask),min(upper,bid)
+                for d in local:
+                    d['rent']=(lower+upper)/2.
+                deals.extend(local)
                 continue
             i=j=0
             s,b=sellers[0]['quantity'],buyers[0]['quantity']

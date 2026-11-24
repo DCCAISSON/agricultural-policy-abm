@@ -304,6 +304,43 @@ class SpatialIndex:
         return obj_id in self._objects
 
 
+def area_moore_neighbors(actors, seed=17):
+    """Synthetic grid of the actual physical area ledgers, not surveyed coordinates."""
+    from collections import defaultdict
+    from scipy.sparse import csr_matrix
+    import numpy as np
+    regions=defaultdict(list)
+    for actor in actors:
+        regions[actor.zone].append(actor)
+    coords={}; anchor={}; areas={}; rights={}; zone_by_plot={}
+    for region,group in sorted(regions.items()):
+        farms=sorted((a for a in group if a.area_kind=='household'),key=lambda a:str(a.unique_id))
+        if not farms:
+            continue
+        rng=np.random.default_rng([seed,int(region)])
+        side=int(np.ceil(np.sqrt(len(farms))))
+        for k,a in zip(rng.permutation(len(farms)),farms):
+            coords[a.unique_id]=(int(region),int(k%side),int(k//side))
+            areas[a.unique_id]=a.base_area
+            rights[a.unique_id]=a.lease_right
+            zone_by_plot[a.unique_id]=int(region)
+        for a in sorted((a for a in group if a.area_kind!='household'),key=lambda a:str(a.unique_id)):
+            from hashlib import sha256
+            h=int.from_bytes(sha256(f'{seed}:{region}:{a.unique_id}'.encode()).digest()[:8],'big')
+            anchor[a.unique_id]=farms[h%len(farms)].unique_id
+    ids=list(coords)
+    idx={k:i for i,k in enumerate(ids)}
+    by_coord={v:k for k,v in coords.items()}
+    pairs=[(i,idx[by_coord[z,x+dx,y+dy]]) for i,k in enumerate(ids)
+           for z,x,y in [coords[k]] for dx in (-1,0,1) for dy in (-1,0,1)
+           if (dx or dy) and (z,x+dx,y+dy) in by_coord]
+    ii,jj=zip(*pairs) if pairs else ([],[])
+    w=csr_matrix((np.ones(len(pairs),dtype=bool),(ii,jj)),shape=(len(ids),len(ids)))
+    assert not (w!=w.T).nnz and np.diff(w.indptr).max(initial=0)<=8
+    return dict(ids=ids,index=idx,coordinates=coords,area=areas,rights=rights,zone=zone_by_plot,
+                anchors={k:k for k in ids}|anchor,neighbors=w,synthetic=True)
+
+
 class PatchSpatialIndex:
     """
     土地地块专用空间索引
