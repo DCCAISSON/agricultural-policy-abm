@@ -174,3 +174,18 @@ def test_scale_participation_retains_zero_area_and_resource_constraints():
     assert not a['cultivated'].any() and b['cultivated'][0]>0 and b['cultivated'][1]==0
     np.testing.assert_array_equal(a['stay_probability'],b['stay_probability'])
     assert (b['cost']<=s['funds']).all()
+
+
+def test_final_joint_choice_does_not_draw_an_infeasible_incumbent():
+    s,f,u=fixture()
+    s['prior']=[0.,0.]
+    s['labor']=[100.,100.]
+    s['inputs']=[[200.,1.,20.,30.,2.,6.,10.,0.],[1.,1.,20.,30.,2.,6.,10.,0.]]
+    u[:,1]=.2
+    flags={'economic_participation':True,'scores':False}
+    r3=farm_batch(s,f,u,stage=2,diagnostic=flags,incentive=0.)
+    f1=farm_batch(s,f,u,stage=2,diagnostic=flags|{'joint_choice':True},incentive=0.)
+    assert not r3['cultivated'].any()
+    assert f1['grain'][0]>0 and f1['crop'][0]>0
+    assert f1['cultivated'][1]==0 and f1['cost'][1]==0
+    assert f1['probabilities'][0,1]==0 and f1['probabilities'][1,1]==1

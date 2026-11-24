@@ -326,8 +326,9 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                cash_sale,*[req['other_cost_per_mu'][t] for t in ('grain','cash_crop')],
                *[req['labor_days'][t] for t in ('grain','cash_crop')]) for z,y in yield_map.items()}
     base=b.set_index('actor')
-    use_pool=settings.get('scale') in ('R1','R3')
-    use_economic=settings.get('scale') in ('R2','R3')
+    use_pool=settings.get('scale') in ('R1','R3','F1')
+    use_economic=settings.get('scale') in ('R2','R3','F1')
+    final_candidate=settings.get('scale')=='F1'
     if use_pool:
         from scripts.prepare_nfps_v3 import prepare_scale_inputs
         _,pool,profiles_out,capacity_out=prepare_scale_inputs(cohort)
@@ -490,6 +491,8 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                     model.area_economy['behavior_diagnostic']=dict(trace=True,**knockouts[settings['ablation']])
                 if use_economic:
                     model.area_economy['behavior_diagnostic']=dict(economic_participation=True)
+                if final_candidate:
+                    model.area_economy['behavior_diagnostic'].update(joint_choice=True)
                 if stage>=4:
                     from modules.spatial_index import area_moore_neighbors
                     space=area_moore_neighbors(actors)
@@ -745,7 +748,7 @@ elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
     p.add_argument('--budget',choices=['frozen','low','mid','high'],default='frozen')
     p.add_argument('--ablation',choices=['A','B','C','D','E','F','G_labor','G_cash'])
     p.add_argument('--repair',action='store_true',help='enable the one frozen household behavior repair')
-    p.add_argument('--scale',choices=['R1','R2','R3'],help='V4.1 predeclared scale contrast (R0: repair only)')
+    p.add_argument('--scale',choices=['R1','R2','R3','F1'],help='V4.1 scale contrast or final economic closure')
     for x in ('grain','cash','wage','rent','cash-funds'): p.add_argument('--'+x,type=float,default=0.)
     v=vars(p.parse_args(sys.argv[2:]))
     v['stage']=4 if v['mode']=='V4' else int(v['mode'][1])
@@ -754,7 +757,7 @@ elif __name__ == "__main__" and __import__('sys').argv[1:2]==['v4']:
     if v['repair'] and (v['stage']!=4 or v['ablation']):
         p.error('repair requires the complete V4 configuration')
     if v['scale'] and not v['repair']:
-        p.error('R1/R2/R3 require --repair')
+        p.error('scale comparisons require --repair')
     dest=v.pop('destination')
     run_area_structures(dest,'D',settings=v)
 elif __name__ == "__main__":

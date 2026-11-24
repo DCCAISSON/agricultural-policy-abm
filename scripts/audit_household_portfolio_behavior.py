@@ -1510,7 +1510,7 @@ def area_shapley(start, end):
     return out
 
 
-def audit_v41(destination, *, final=False):
+def audit_v41(destination, *, final=False, frozen=None):
     import numpy as np
     from scipy.stats import t
     from scripts.prepare_nfps_v3 import RAW, candidate_cohort, prepare_scale_inputs
@@ -1545,16 +1545,21 @@ def audit_v41(destination, *, final=False):
         authorized_nfps_sha256=source_sha,households=cohort.cohort_agent_id.nunique())]).to_csv(out/'source_receipt.csv',index=False)
     cases=[('R0',predecessor)]
     if final:
-        cases=[(k,private/(k+'_diag')) for k in ('M0','R0','R1','R2','R3')]
-        cases += [(k,private/f'{k}_{seed}') for k in ('M0','R0','R3') for seed in range(301,321,5)]
-        initial=(private/'R0_diag/PRIVATE_DO_NOT_SHARE/baseline.csv').read_bytes()
+        reference=Path(frozen)/'PRIVATE_DO_NOT_SHARE' if frozen is not None else private
+        specs=('M0','R0','R3') if frozen is not None else ('M0','R0','R1','R2','R3')
+        cases=[(k,reference/(k+'_diag')) for k in specs]
+        cases += [(k,reference/f'{k}_{seed}') for k in ('M0','R0','R3') for seed in range(301,321,5)]
+        if frozen is not None:
+            cases += [('F1',private/'F1_diag')]+[('F1',private/f'F1_{seed}') for seed in range(301,321,5)]
+        initial=(reference/'R0_diag/PRIVATE_DO_NOT_SHARE/baseline.csv').read_bytes()
         for tag,path in cases:
             if tag!='M0':
                 assert (path/'PRIVATE_DO_NOT_SHARE/baseline.csv').read_bytes()==initial
-        agreements.append(dict(spec='R0/R1/R2/R3',seed='all',check='initial household states byte-identical'))
+        agreements.append(dict(spec='R0/R3/F1' if frozen is not None else 'R0/R1/R2/R3',
+                               seed='all',check='initial household states byte-identical'))
         old=predecessor/'PRIVATE_DO_NOT_SHARE'
         if old.is_dir():
-            files=list((private/'R0_diag/PRIVATE_DO_NOT_SHARE').glob('*.*'))
+            files=list((reference/'R0_diag/PRIVATE_DO_NOT_SHARE').glob('*.*'))
             assert files and all((old/f.name).is_file() for f in files)
             for f in files:
                 assert sha256(f.read_bytes()).digest()==sha256((old/f.name).read_bytes()).digest(),f.name
@@ -1692,8 +1697,13 @@ def audit_v41(destination, *, final=False):
         for year,d in b.groupby('year'):
             for v in ('sim_grain','sim_active','sim_mixed','sim_close_area','sim_in','sim_out','area_error','gate'):
                 x=d.pivot(index='seed',columns='spec',values=v).astype(float)
-                assert list(x)==['M0','R0','R3'] and len(x)==20 and x.notna().all().all()
-                for tag,s in {'M0':x.M0,'R0':x.R0,'R3':x.R3,'R3-R0':x.R3-x.R0,'R3-M0':x.R3-x.M0}.items():
+                expected={'M0','R0','R3'}|({'F1'} if frozen is not None else set())
+                assert set(x)==expected and set(x.index)==set(range(301,321)) and x.notna().all().all()
+                contrasts={k:x[k] for k in sorted(expected)}
+                contrasts.update({'R3-R0':x.R3-x.R0,'R3-M0':x.R3-x.M0})
+                if frozen is not None:
+                    contrasts.update({f'F1-{k}':x.F1-x[k] for k in ('R0','R3','M0')})
+                for tag,s in contrasts.items():
                     half=t.ppf(.975,19)*s.std(ddof=1)/np.sqrt(20)
                     effects.append(dict(year=year,metric=v,spec=tag,n=len(s),mean=s.mean(),median=s.median(),
                         p05=s.quantile(.05),p95=s.quantile(.95),ci95_low=s.mean()-half,ci95_high=s.mean()+half))

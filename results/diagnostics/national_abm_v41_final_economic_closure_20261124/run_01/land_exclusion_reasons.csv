@@ -1,0 +1,16 @@
+year,area_issue,positive_two_crop,households
+2011,closing_area_missing,False,20
+2011,closing_area_missing,True,3
+2011,zero_area_with_positive_sowing,True,1
+2012,closing_area_missing,False,22
+2012,closing_area_missing,True,6
+2012,zero_area_with_positive_sowing,True,2
+2013,closing_area_missing,False,42
+2013,closing_area_missing,True,6
+2013,zero_area_with_positive_sowing,True,4
+2014,closing_area_missing,False,54
+2014,closing_area_missing,True,5
+2014,zero_area_with_positive_sowing,True,2
+2015,closing_area_missing,False,57
+2015,closing_area_missing,True,7
+2015,zero_area_with_positive_sowing,True,5

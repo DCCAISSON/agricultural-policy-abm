@@ -1,0 +1,5 @@
+spec,seed,check
+R0/R3/F1,all,initial household states byte-identical
+R0,103,all key ledgers byte-identical on repeat
+R3,103,all key ledgers byte-identical on repeat
+F1,103,all key ledgers byte-identical on repeat

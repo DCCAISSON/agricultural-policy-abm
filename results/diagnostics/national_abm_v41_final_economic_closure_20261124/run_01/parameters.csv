@@ -1,0 +1,13 @@
+item,unit,source,rule,change_vs_R3
+household_participation,mu,NFPS resources and feasible plan comparison,choose zero if no positive area and positive expected surplus; otherwise crop direction lottery uses only profitable feasible plans,changed
+crop_share_direction_and_amplitude,proportion,noncohort NFPS adjacent-year matched records through 2012,keep previous fitted probabilities and conditional magnitudes; no retrospective outcome adjustment,unchanged
+land_rights,mu,2010 NFPS reported contracted component,verified transferable entitlement only; undocumented rights are not assumed zero stock,unchanged
+outside_land_capacity,mu,lagged noncohort NFPS positive transfer reports,lower-bound proxy by province and size; limited to eligible unfilled household orders,unchanged
+family_labor_ceiling,days,NFPS laborer count and migrant or local work time with CFPS 2010 reference,reported activity informs ceiling not realized time automatically available for farming,unchanged
+crop_labor_and_cash_cost,days and CNY2024 per sown mu,frozen crop budget with 2016–2017 crop specific audit as supporting evidence,mechanical expenditure does not subtract worker days; no independent service purchase,unchanged
+hired_labor,days and CNY2024,sown area multiplied by crop requirements less used household days,hired days times frozen external wage; no induced off-farm income,unchanged
+grain_crop_specific_capacity,kg per sown mu,pre-2011 NFPS same crop history and region medians,regional baseline with earlier approved shrinkage; fixed initial crop mix weights,unchanged
+early_rice_identity,case,NFPS household and member follow-up 2003–2010,recheck 19 old-cohort cases; not a universal ability input and no substitution into fixed F1 initialization,audit only
+outside_crop_yield_reference,kg per mu,CHFS2015 B1004d/e/f previous-year crop reports,verified mu reports only; comparison not calibration,audit only
+annual_weather,multiplier,frozen paired zone-year-seed draw,apply after acreage choice; distinct from capacity and technical change,unchanged
+fiscal_payment,CNY2024,frozen fixed-policy basis,post-harvest by verified eligible area and budget; outside pool excluded,unchanged

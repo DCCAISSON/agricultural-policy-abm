@@ -129,6 +129,8 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
     h = np.maximum(0.,days*p-labor[:,None])
     pc=material*p+wage[:,None]*h
     pv=sales*p-pc+aid[:,None]*p/intensity[:,None]
+    if trade and flags.get('joint_choice'):
+        pv-=rent[:,None]*np.maximum(0.,p/intensity[:,None]-land[:,None])
     option=np.argmax(value,axis=2)[:,:,None]
     def selected(array):
         return np.take_along_axis(array,option,axis=2)[:,:,0]
@@ -150,6 +152,11 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
         scores += .25 * ((slack-slack[:,1,None]) + (liquid-liquid[:,1,None]))
     feasible = (np.abs(shares-prior[:,None])>1e-8) & (total>1e-8)
     feasible[:,1] = True
+    if flags.get('joint_choice'):
+        # Compare economic participation before drawing a crop direction.
+        # Keep the zero plan only when no distinct positive-surplus plan exists.
+        profitable=feasible & (total>1e-8) & (best>1e-8)
+        feasible=np.where(profitable.any(axis=1)[:,None],profitable,np.arange(shares.shape[1])==1)
     probabilities = softmax(np.where(feasible,scores,-np.inf),axis=1)
     idx = (u[:,1,None]>np.cumsum(probabilities,axis=1)[:,:-1]).sum(axis=1)
     i = np.arange(len(idx))
@@ -165,6 +172,8 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
     # V4.1 keeps economic exit (zero is already a candidate). For a landless
     # household, pre-trade area is only a bid; post-trade area requires an actual lease.
     chosen = total[i,idx] if flags.get('economic_participation') else total[i,idx]*(u[:,0]<participation)
+    if flags.get('joint_choice'):
+        chosen=np.where(profitable.any(axis=1),chosen,0.)
     g, c = chosen*shares[i,idx], chosen*(1.-shares[i,idx])
     phys=chosen/intensity
     ask=np.maximum(0.,(sales[i,idx]-material[i,idx]-

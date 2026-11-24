@@ -1,5 +1,7 @@
 # 全国农业经济ABM：V4家庭行为一次修复
 
+**F1最终综合候选。** 从V4.1固定版本统一家庭参与与可行粮经方案，复核经营面积、劳动、生产和跨年度账户。实现与审计已完成，联合行为检验未通过；[查看完整证据、模型说明和复算](results/diagnostics/national_abm_v41_final_economic_closure_20261124/run_01/README.md)。
+
 **V4.1 规模闭合候选。** 在固定600户上分别比较区域外部土地池和取消经营方案后的重复抽签；保留原粮经选择及历史版本。查看[本轮源码配套结果、ODD+D和复算](./results/diagnostics/national_abm_v41_scale_closure_20261124/run_01/README.md)。本轮不排序政策，不训练政府。
 
 [本轮诊断、修复结果、测试和一键复算](results/diagnostics/national_abm_v4_behavior_repair_20261124/run_01/README.md)。2011年参与和2015年兼种偏差缩小；联合行为门槛仍未通过，不启动政策排序或政府学习。
