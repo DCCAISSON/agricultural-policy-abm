@@ -1,0 +1,42 @@
+[
+  {
+    "file": "annual_means.csv",
+    "sha256": "b2ae08a76ce843080fda05d1091076286592fe83aed9f942dfbd55b4291084b4"
+  },
+  {
+    "file": "annual.csv",
+    "sha256": "f6663608d83e688a7275753ae2738ac205992600f4f8c660246fe6d2f19b3997"
+  },
+  {
+    "file": "distribution.csv",
+    "sha256": "712c6015ddd0f7173b709cb361c60fd80bba343167fbbea1040d00c5a9e30890"
+  },
+  {
+    "file": "manifest.json",
+    "sha256": "fab9c5435c169814b3269151891919b184156be52189322f9fb15956cf746b81"
+  },
+  {
+    "file": "mechanism_contrasts.csv",
+    "sha256": "db62e140fa8b0acde4b716f3790d3b7ac26af913d5964a8477c45f859a8f5ec8"
+  },
+  {
+    "file": "paired_effects.csv",
+    "sha256": "890f94c5a78503e8c173d1eda4a38743d9edd24646eed246e5d81750b070d5f9"
+  },
+  {
+    "file": "policy_choices.csv",
+    "sha256": "2ec0ac73bce1e5f16d513dd46be2fd52954034f4e37ed5f7cf902f5bfa10b6f8"
+  },
+  {
+    "file": "q_table.json",
+    "sha256": "8501b58bc0c88e1560eb34e5ec85bdfacc8918c6ec746791ceb96e8bd815eaf7"
+  },
+  {
+    "file": "training_sar.csv",
+    "sha256": "118b8521857a3addbbf2d2146c89d25c35a6fcc7ff4a0b5e35320bc264707a97"
+  },
+  {
+    "file": "world_means.csv",
+    "sha256": "8fd60776fee87fbd0eac7fd07b19ee2bb96ae4933b6f8a06b4d15fc4bee35356"
+  }
+]

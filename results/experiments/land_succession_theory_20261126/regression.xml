@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="31" time="7.421" timestamp="2026-11-26T01:51:32.046645+08:00">
+    <testcase classname="tests.test_land_succession" name="test_cash_surplus_does_not_override_nonfarm_option" time="0.001" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[none]" time="0.008" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[grain_post]" time="0.008" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[takeover_pre]" time="0.007" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[takeover_post]" time="0.008" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[grain_pre]" time="0.007" />
+    <testcase classname="tests.test_land_succession" name="test_full_and_zero_search_failure_and_absent_tenants" time="0.004" />
+    <testcase classname="tests.test_land_succession" name="test_a_valid_lease_can_fail_to_produce[labor_realization]" time="0.002" />
+    <testcase classname="tests.test_land_succession" name="test_a_valid_lease_can_fail_to_produce[cash_available]" time="0.002" />
+    <testcase classname="tests.test_land_succession" name="test_no_release_and_no_trade" time="0.001" />
+    <testcase classname="tests.test_land_succession" name="test_beginnings_repeat_and_annual_state_is_real" time="0.005" />
+    <testcase classname="tests.test_land_succession" name="test_policy_reads_previous_observation_and_evaluation_does_not_learn" time="0.017" />
+    <testcase classname="tests.test_v4_area_economy" name="test_vectorized_households_equal_scalar_reference_and_balance_resources" time="0.003" />
+    <testcase classname="tests.test_v4_area_economy" name="test_price_aid_and_budget_directions[0.0]" time="0.002" />
+    <testcase classname="tests.test_v4_area_economy" name="test_price_aid_and_budget_directions[0.4]" time="0.002" />
+    <testcase classname="tests.test_v4_area_economy" name="test_price_aid_and_budget_directions[1.0]" time="0.002" />
+    <testcase classname="tests.test_v4_area_economy" name="test_market_sparse_grid_and_fiscal_actions" time="0.001" />
+    <testcase classname="tests.test_v4_area_economy" name="test_clustered_fit_is_reproducible" time="0.003" />
+    <testcase classname="tests.test_v4_area_economy" name="test_tabular_update_smoke_on_synthetic_regional_transition" time="0.001" />
+    <testcase classname="tests.test_v4_area_economy" name="test_repair_uses_entry_draw_and_lagged_land_risk_without_cash_covariate" time="0.002" />
+    <testcase classname="tests.test_v4_area_economy" name="test_ablation_records_positive_plan_rejected_by_stay_random_draw" time="0.001" />
+    <testcase classname="tests.test_v4_area_economy" name="test_scale_shapley_closes_and_reverses_with_single_sided_cultivation" time="0.030" />
+    <testcase classname="tests.test_v4_area_economy" name="test_scale_pool_matches_only_household_residuals_at_regional_rent" time="0.001" />
+    <testcase classname="tests.test_v4_area_economy" name="test_scale_participation_retains_zero_area_and_resource_constraints" time="0.001" />
+    <testcase classname="tests.test_v4_area_economy" name="test_final_joint_choice_does_not_draw_an_infeasible_incumbent" time="0.001" />
+    <testcase classname="tests.test_v3_crop_response" name="test_soft_history_direction_and_physical_constraints[0.0]" time="0.145" />
+    <testcase classname="tests.test_v3_crop_response" name="test_soft_history_direction_and_physical_constraints[0.4]" time="0.038" />
+    <testcase classname="tests.test_v3_crop_response" name="test_soft_history_direction_and_physical_constraints[1.0]" time="0.051" />
+    <testcase classname="tests.test_v3_crop_response" name="test_v2_and_v3_budget_and_non_cash_cost" time="0.007" />
+    <testcase classname="tests.test_continuous_crop_history" name="test_fractional_history_ties_and_exit_are_not_cash_crop" time="0.002" />
+    <testcase classname="tests.test_continuous_crop_history" name="test_annual_crop_and_land_missing_are_not_zero" time="0.007" />
+  </testsuite>
+</testsuites>

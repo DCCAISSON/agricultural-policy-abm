@@ -1,0 +1,19 @@
+parameter,value,unit,status_and_basis
+owners_and_entrants,24 / 8,synthetic actors,Structural design; not NFPS households or national organization counts
+right_plots,2 x 4,plots x mu per household,Synthetic equal parcels; inherited market quantity unit is one plot
+grain_yield,450,kg/mu,Order-of-magnitude reference to F1 independent CHFS estimates for rice maize and wheat; not an estimated composite
+grain_price_cost,2.50 / 620,CNY per kg / CNY per mu,Common synthetic budget; nominal policy and scenario sensitivity are not current China rates
+cash_yield_price_cost,630 / 2.50 / 940,kg/mu / CNY/kg / CNY/mu,Synthetic competing crop; price and profitability not mapped to a named empirical crop
+crop_peak_days,2.5 / 5,days/mu,Structural relative intensity; published F1 labor analysis covers annual observed work not peak needs
+family_labor,22 to 45,days per peak season,Stylized seasonal subset of annual days; CFPS independent annual reference by job status motivates heterogeneity only
+nonfarm_days_and_wage,8 to 38 / 0 to 185,days / CNY per day,Synthetic availability and realized opportunity; inherited V4 hired wage reference 120 calibrates order only; wages x .7 or 1.3 sensitivity
+owner_and_entrant_cash,3900 to 10000 / 4200 to 15500,CNY per operator,Stylized preplant working capital ranges with comparable plot input scale; no CHFS calibration claim
+search,0.08 / 0.48,probability,Prespecified low and high condition; no geographical interpretation
+ask_and_fee,130 / 280,CNY/mu and CNY/contract,Assumed reservation rent and transaction expense; actual rent determined by marketplace
+entry_and_consumption,1000 / 800 / 1900,CNY,Structural annual startup cost and tenant / owner withdrawals
+postmatch_liquidity,0.68 to 1.00,fraction,Structural uncertainty in immediately usable funds; no deduction from underlying cash
+postmatch_labor,0.45 to 1.07,fraction,Structural uncertainty in realizable peak-season work
+plot_quality,0.83 to 1.17,multiplier,Synthetic fixed heterogeneity; no operator-specific yield advantage
+harvest,0.35 / 0.65 / 1.00 / 1.14,multiplier,Synthetic common shocks with probabilities 0.07 / 0.13 / 0.59 / 0.21
+policy_budget,7200,CNY per year,Same annual ceiling for every active policy; actual expenditures endogenously differ
+nominal_support,85,CNY per verified sown mu,Assumed mechanism experiment; robustness 60 and 120

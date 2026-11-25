@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="12" time="4.870" timestamp="2026-11-26T01:51:04.920963+08:00">
+    <testcase classname="tests.test_land_succession" name="test_cash_surplus_does_not_override_nonfarm_option" time="0.001" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[none]" time="0.029" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[grain_post]" time="0.010" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[takeover_pre]" time="0.010" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[takeover_post]" time="0.010" />
+    <testcase classname="tests.test_land_succession" name="test_stock_payments_area_and_annual_cash_rollforward[grain_pre]" time="0.010" />
+    <testcase classname="tests.test_land_succession" name="test_full_and_zero_search_failure_and_absent_tenants" time="0.008" />
+    <testcase classname="tests.test_land_succession" name="test_a_valid_lease_can_fail_to_produce[labor_realization]" time="0.003" />
+    <testcase classname="tests.test_land_succession" name="test_a_valid_lease_can_fail_to_produce[cash_available]" time="0.003" />
+    <testcase classname="tests.test_land_succession" name="test_no_release_and_no_trade" time="0.001" />
+    <testcase classname="tests.test_land_succession" name="test_beginnings_repeat_and_annual_state_is_real" time="0.008" />
+    <testcase classname="tests.test_land_succession" name="test_policy_reads_previous_observation_and_evaluation_does_not_learn" time="4.466" />
+  </testsuite>
+</testsuites>
