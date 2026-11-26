@@ -1,0 +1,11 @@
+{
+  "years": 186800,
+  "plots": 8966400,
+  "operators": 5969600,
+  "transactions": 1128746,
+  "fiscal": 2821002,
+  "analysis_sha256": "30c3369e328106ec305bdc6ff86459ab9e9d63b43fe6a62adc6be5586fa6dbd6",
+  "checks": "passed",
+  "failure_counts": {},
+  "examples": []
+}

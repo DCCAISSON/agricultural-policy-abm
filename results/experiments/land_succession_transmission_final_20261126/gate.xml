@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<testsuites name="pytest tests">
+  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="27" time="2.101" timestamp="2026-11-26T02:56:44.371889+08:00">
+    <testcase classname="tests.test_land_succession_transmission" name="test_zero_budget_policies_have_common_baseline" time="0.241" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_fixed_none_replays_baseline_across_years" time="0.011" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_fixed_pre_payment_can_cover_planting_but_post_cannot" time="0.005" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_joint_allocation_plants_two_grain_plots_instead_of_one_cash_crop" time="0.003" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_joint_allocation_compares_different_offer_groups_against_one_budget" time="0.010" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_same_operator_does_not_requalify_when_contract_continues_or_renews[1]" time="0.006" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_same_operator_does_not_requalify_when_contract_continues_or_renews[3]" time="0.007" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_new_operator_on_recently_fallow_plot_can_qualify_without_strict_continuity" time="0.010" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_market_and_production_constraints_bind[search]" time="0.004" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_market_and_production_constraints_bind[cash]" time="0.004" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_market_and_production_constraints_bind[labor]" time="0.008" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_market_and_production_constraints_bind[no_entrants]" time="0.005" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_no_release_when_owner_can_operate_every_plot" time="0.004" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_support_stops_without_resetting_cash_and_plot_history" time="0.004" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_cash_carry_switch_changes_next_opening_balance" time="0.033" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[grain_pre-24.0]" time="0.047" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[grain_pre-100000.0]" time="0.051" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[grain_post-24.0]" time="0.039" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[grain_post-100000.0]" time="0.045" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[takeover_pre-24.0]" time="0.049" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[takeover_pre-100000.0]" time="0.048" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[takeover_post-24.0]" time="0.049" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_land_fiscal_and_operator_accounts_close[takeover_post-100000.0]" time="0.035" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_seeded_path_is_invariant_to_plot_order[None]" time="0.083" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_seeded_path_is_invariant_to_plot_order[11]" time="0.056" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_seeded_path_is_invariant_to_plot_order[39]" time="0.106" />
+    <testcase classname="tests.test_land_succession_transmission" name="test_seeded_path_is_invariant_to_plot_order[93]" time="0.095" />
+  </testsuite>
+</testsuites>

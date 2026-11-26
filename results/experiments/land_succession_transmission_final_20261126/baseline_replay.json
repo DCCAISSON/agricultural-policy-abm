@@ -1,0 +1,78 @@
+{
+  "baseline": "25dae88d2727dc8f5c950fed534a65806bbfa648",
+  "run_years": 17088,
+  "prior_versions": {
+    "python": "3.11.2 (tags/v3.11.2:878ead1, Feb  7 2023, 16:38:35) [MSC v.1934 64 bit (AMD64)]",
+    "numpy": "2.4.0",
+    "pandas": "2.3.3"
+  },
+  "replayed_versions": {
+    "python": "3.11.2 (tags/v3.11.2:878ead1, Feb  7 2023, 16:38:35) [MSC v.1934 64 bit (AMD64)]",
+    "numpy": "1.26.4",
+    "pandas": "2.2.3"
+  },
+  "artifacts": [
+    {
+      "filename": "annual_means.csv",
+      "frozen_sha256": "b2ae08a76ce843080fda05d1091076286592fe83aed9f942dfbd55b4291084b4",
+      "replayed_sha256": "b2ae08a76ce843080fda05d1091076286592fe83aed9f942dfbd55b4291084b4",
+      "identical": true
+    },
+    {
+      "filename": "annual.csv",
+      "frozen_sha256": "f6663608d83e688a7275753ae2738ac205992600f4f8c660246fe6d2f19b3997",
+      "replayed_sha256": "f6663608d83e688a7275753ae2738ac205992600f4f8c660246fe6d2f19b3997",
+      "identical": true
+    },
+    {
+      "filename": "distribution.csv",
+      "frozen_sha256": "712c6015ddd0f7173b709cb361c60fd80bba343167fbbea1040d00c5a9e30890",
+      "replayed_sha256": "712c6015ddd0f7173b709cb361c60fd80bba343167fbbea1040d00c5a9e30890",
+      "identical": true
+    },
+    {
+      "filename": "manifest.json",
+      "frozen_sha256": "fab9c5435c169814b3269151891919b184156be52189322f9fb15956cf746b81",
+      "replayed_sha256": "21a5c7658aa464bee52d752e21442a81b3e545134d7f8f889c3f5eb9af751aed",
+      "identical": false
+    },
+    {
+      "filename": "mechanism_contrasts.csv",
+      "frozen_sha256": "db62e140fa8b0acde4b716f3790d3b7ac26af913d5964a8477c45f859a8f5ec8",
+      "replayed_sha256": "db62e140fa8b0acde4b716f3790d3b7ac26af913d5964a8477c45f859a8f5ec8",
+      "identical": true
+    },
+    {
+      "filename": "paired_effects.csv",
+      "frozen_sha256": "890f94c5a78503e8c173d1eda4a38743d9edd24646eed246e5d81750b070d5f9",
+      "replayed_sha256": "890f94c5a78503e8c173d1eda4a38743d9edd24646eed246e5d81750b070d5f9",
+      "identical": true
+    },
+    {
+      "filename": "policy_choices.csv",
+      "frozen_sha256": "2ec0ac73bce1e5f16d513dd46be2fd52954034f4e37ed5f7cf902f5bfa10b6f8",
+      "replayed_sha256": "2ec0ac73bce1e5f16d513dd46be2fd52954034f4e37ed5f7cf902f5bfa10b6f8",
+      "identical": true
+    },
+    {
+      "filename": "q_table.json",
+      "frozen_sha256": "8501b58bc0c88e1560eb34e5ec85bdfacc8918c6ec746791ceb96e8bd815eaf7",
+      "replayed_sha256": "8501b58bc0c88e1560eb34e5ec85bdfacc8918c6ec746791ceb96e8bd815eaf7",
+      "identical": true
+    },
+    {
+      "filename": "training_sar.csv",
+      "frozen_sha256": "118b8521857a3addbbf2d2146c89d25c35a6fcc7ff4a0b5e35320bc264707a97",
+      "replayed_sha256": "118b8521857a3addbbf2d2146c89d25c35a6fcc7ff4a0b5e35320bc264707a97",
+      "identical": true
+    },
+    {
+      "filename": "world_means.csv",
+      "frozen_sha256": "8fd60776fee87fbd0eac7fd07b19ee2bb96ae4933b6f8a06b4d15fc4bee35356",
+      "replayed_sha256": "8fd60776fee87fbd0eac7fd07b19ee2bb96ae4933b6f8a06b4d15fc4bee35356",
+      "identical": true
+    }
+  ],
+  "manifest_difference": "Only declared NumPy and pandas versions differ",
+  "command": "python -B -X utf8 -m scripts.run_land_succession <new_output> --summaries-only"
+}

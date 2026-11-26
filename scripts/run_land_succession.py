@@ -1,4 +1,5 @@
-"""Run the preregistered synthetic succession experiment and independent policy evaluation."""
+"""Run the synthetic land-succession experiment. Use --smoke before --formal."""
+
 import argparse
 import csv
 import gzip
@@ -6,251 +7,333 @@ import io
 import json
 import subprocess
 import sys
+from collections import Counter
+from collections.abc import Callable, Iterable
 from contextlib import ExitStack
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from hashlib import sha256
-from itertools import product
+from itertools import islice, product
+from multiprocessing import get_context
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
-from scipy.stats import t
 
-from agents.government_agent import GovernmentAgent
-from core.land_succession import CROPS, POLICIES, TIMING_CONTROLS, Scenario, Succession
+ROOT = Path(__file__).resolve().parents[1]
+if __package__ in (None, ""):
+    sys.path.insert(0, str(ROOT))
 
-YEARS = 8
-SEEDS = tuple(range(301,325))
-TRAIN_SEEDS = tuple(range(10001,10385))
-EVAL_SEEDS = tuple(range(20001,20025))
+from core.land_succession import CROPS, POLICIES, Scenario, Succession
+from scripts.succession_q import (
+    COMMON_STATE_SHARE, DISCOUNT, LEARNING_RATE, MIN_ACTION_VISITS, MIN_COVERAGE,
+    SAR_FIELDS, STATE_NAMES, THRESHOLDS, TRANSPARENT_RULE, WEIGHTS, YEARS, LearnedPolicy,
+    TrainingJob, observation, reward, train, transparent,
+)
 
-
-def observation(world):
-    r=world.observed
-    offered=max(1.,r["offered_area"])
-    return (int(r["grain_kg"]<.55*world.land*CROPS["grain"][0]),
-            int(r["unfilled_area"]/offered>.35),
-            int(r["successor_grain"]/offered>=.3),
-            int(r["spending"]>.7*world.scenario.budget))
-
-
-def transparent(state):
-    low_grain, unmet, strong_takeover, high_spend=state
-    if low_grain:
-        return 1 if unmet or not strong_takeover else 2
-    return 0 if high_spend else 2 if strong_takeover else 1
-
-
-def reward(world, result):
-    return (result["grain_kg"]/(world.land*CROPS["grain"][0])
-            +.18*result["successor_grain"]/world.land
-            -.14*result["spending"]/world.scenario.budget)
+EXPECTED_POLICIES = ("none", "grain_pre", "grain_post", "takeover_pre", "takeover_post")
+SEEDS = tuple(range(301, 401))
+SENS_SEEDS = SEEDS[:50]
+EVAL_SEEDS = tuple(range(200001, 200101))
+TRAIN_STARTS = tuple(range(10001, 60001, 10000))
+GATE = "tests/test_land_succession_transmission.py"
+INDEPENDENT_AUDIT = ('python -B -c "from pathlib import Path; from scripts.succession_analysis '
+                     'import analyze; analyze(Path(\'../formal\'))"')
+CONTRACT_FIELDS = ("assigned_operator", "rent_per_mu", "contract_start", "contract_end",
+                   "released", "posted", "matched")
+SOLID_ORDER = ("original", "reverse", "shuffle1", "shuffle2", "shuffle3")
+Row = dict[str, str | int | float | bool | None]
+Ledgers = dict[str, list[Row]]
 
 
-def train(scenarios):
-    # Reuse the frozen government Bellman update without initializing its old economy.
-    gov=SimpleNamespace(q_table={},q_table_frozen=False,learning_rate=.14,discount_factor=.92)
-    history=[]
-    for episode,seed in enumerate(TRAIN_SEEDS):
-        condition,scenario=scenarios[episode % len(scenarios)]
-        world=Succession(seed,scenario)
-        rng=np.random.default_rng([seed,283])
-        epsilon=max(.08,.55*(1-episode/len(TRAIN_SEEDS)))
-        for year in range(1,YEARS+1):
-            state=observation(world)
-            gov.last_state=state
-            table=gov.q_table.setdefault(state,[0.]*len(POLICIES))
-            action=int(rng.integers(len(POLICIES))) if rng.random()<epsilon else int(np.argmax(table))
-            gov.last_action=action
-            out=world.step(POLICIES[action])
-            nxt=observation(world)
-            score=reward(world,out)
-            GovernmentAgent._update_q_table(gov,score,nxt,done=year==YEARS)
-            history.append(dict(episode=episode+1,seed=seed,condition=condition,year=year,
-                 state=str(state),next_state=str(nxt),action=POLICIES[action],reward=score,epsilon=epsilon,**out))
-    return {k:tuple(v) for k,v in gov.q_table.items()},pd.DataFrame(history)
+def designs() -> dict[str, dict[str, Scenario]]:
+    base = Scenario(search_failure=.08, cash=1., labor=1.)
+    factorial = {}
+    for search, cash, labor in product((False, True), repeat=3):
+        name = f'{"high" if search else "low"}_search__{"tight" if cash else "ample"}_cash__{"tight" if labor else "ample"}_labor'
+        factorial[name] = replace(base, search_failure=.48 if search else .08,
+                                  cash=.56 if cash else 1., labor=.60 if labor else 1.)
+    middle = replace(base, search_failure=.25, cash=.73, labor=.77)
+    changes = {
+        "middle": middle,
+        "friction_off": replace(middle, search_failure=0., fee=0.),
+        "search_zero": replace(middle, search_failure=0.),
+        "search_blocked": replace(middle, search_failure=1.),
+        "fee_off": replace(middle, fee=0.),
+        "fee_high": replace(middle, fee=560.),
+        "no_tenants": replace(middle, entrants=0),
+        "few_tenants": replace(middle, entrants=4),
+        "many_tenants": replace(middle, entrants=16),
+        "cash_relief": replace(middle, cash=4.),
+        "cash_tight": replace(middle, cash=.15),
+        "labor_relief": replace(middle, labor=3.),
+        "labor_tight": replace(middle, labor=.15),
+        "rent_low": replace(middle, ask_per_mu=65.),
+        "rent_high": replace(middle, ask_per_mu=195.),
+        "start_free": replace(middle, start_cost=0.),
+        "start_high": replace(middle, start_cost=2000.),
+        "cash_reset": replace(middle, carry_cash=False),
+        "exit_reset": replace(middle, carry_exit=False),
+        "no_feedback": replace(middle, carry_cash=False, carry_exit=False),
+        "contract_3yr": replace(middle, contract_years=3),
+        "recovery": replace(middle, recovery=True),
+        "reentry": replace(middle, reentry=True),
+        "wage_low": replace(middle, outside_wage=.7),
+        "wage_high": replace(middle, outside_wage=1.3),
+        "rate_low": replace(middle, rate=60.),
+        "rate_high": replace(middle, rate=120.),
+        "budget_tight": replace(middle, budget=360.),
+        "budget_slack": replace(middle, budget=20_000.),
+    }
+    return {
+        "factorial": factorial, "fixed_contract": factorial, "diagnostic": changes,
+        "duration": {k: changes[k] for k in ("middle", "contract_3yr")},
+        "plot_order": {"middle": middle, "contract_3yr": changes["contract_3yr"]},
+        "evaluation": {
+            "unseen_middle": middle,
+            "unseen_cash_labor": replace(middle, search_failure=.18, cash=.66, labor=.49),
+            "unseen_search": replace(middle, search_failure=.66, cash=.88, labor=.92),
+        },
+    }
 
 
-def simulate(seed, scenario, strategy, q, log, group, condition):
-    world=Succession(seed,scenario)
-    result=[]
-    for year in range(1,YEARS+1):
-        state=observation(world)
-        if strategy=="rule":
-            action=POLICIES[transparent(state)]
-        elif strategy=="q":
-            action=POLICIES[int(np.argmax(q[state])) if state in q else transparent(state)]
+def write_gzip(stack: ExitStack, path: Path) -> io.TextIOWrapper:
+    raw = stack.enter_context(path.open("wb"))
+    stream = stack.enter_context(gzip.GzipFile(filename="", fileobj=raw, mode="wb",
+                                              compresslevel=1, mtime=0))
+    return stack.enter_context(io.TextIOWrapper(stream, encoding="utf-8", newline=""))
+
+
+def _record(log: Callable, world: Succession, key: Row, out: Row,
+            plots: list[Row], actors: list[Row], trades: list[Row],
+            state: tuple[int, ...], fallback: str = "", available_years: int = YEARS) -> Row:
+    for label, rows in (("plots", plots), ("operators", actors), ("transactions", trades)):
+        log(label, (entry | key for entry in rows))
+    log("fiscal", (key | {k: p[k] for k in ("plot", "operator", "crop", "eligible",
+                                            "commitment", "expected_support", "support")}
+                   for p in plots if p["eligible"] or p["commitment"] or p["support"]))
+    row = out | key | dict(
+        previous_state=str(state), unseen_state=fallback == "unseen_state",
+        policy_fallback=fallback, planned_support_years=available_years,
+        total_area=world.land, contract_years=world.scenario.contract_years,
+        reward=reward(world, out), **{f"reward_{name}": reward(world, out, name) for name in WEIGHTS},
+    )
+    log("annual", (row,))
+    return row
+
+
+def simulate(seed: int, scenario: Scenario, strategy: str, learned: LearnedPolicy | None,
+             log: Callable, group: str, condition: str, *, policy: str | None = None,
+             active: int = YEARS, order: str = "original") -> list[Row]:
+    world = Succession(seed, scenario)
+    if order == "reverse":
+        world.plots.reverse()
+    elif order.startswith("shuffle"):
+        np.random.default_rng([seed, 731, int(order[-1])]).shuffle(world.plots)
+    follow: dict[str, tuple[Row, int]] = {}
+    rows = []
+    for year in range(1, YEARS + 1):
+        state = observation(world)
+        fallback = ""
+        if learned is not None:
+            action, fallback = learned.choose(state)
+            actual = POLICIES[action]
+        elif strategy == "rule":
+            actual = POLICIES[transparent(state)]
         else:
-            action=strategy
-        out,plots,actors,trades=world.step(action,ledger=True)
-        key=dict(group=group,condition=condition,seed=seed,year=year,strategy=strategy,policy=action)
-        for label,entries in (("plots",plots),("operators",actors),("transactions",trades)):
-            log(label,[key|entry for entry in entries])
-        result.append(key|dict(previous_state=str(state),unseen_state=strategy=="q" and state not in q,
-                               reward=reward(world,out))|out)
-    return result
-
-
-def designs():
-    baseline=Scenario(search_failure=.08,cash=1.,labor=1.)
-    factorial={}
-    for search,liquidity,labor in product((False,True),repeat=3):
-        name=f'{"high" if search else "low"}_search__{"tight" if liquidity else "ample"}_cash__{"tight" if labor else "ample"}_labor'
-        factorial[name]=replace(baseline,search_failure=.48 if search else .08,
-                                cash=.56 if liquidity else 1.,labor=.60 if labor else 1.)
-    middle=replace(baseline,search_failure=.25,cash=.73,labor=.77)
-    changes={
-        "middle":middle,
-        "friction_off":replace(middle,search_failure=0.,fee=0.),
-        "no_tenants":replace(middle,entrants=0),
-        "cash_relief":replace(middle,cash=4.),
-        "labor_relief":replace(middle,labor=3.),
-        "no_feedback":replace(middle,feedback=False),
-        "wage_low":replace(middle,outside_wage=.7),
-        "wage_high":replace(middle,outside_wage=1.3),
-        "rate_low":replace(middle,rate=60.),
-        "rate_high":replace(middle,rate=120.),
-    }
-    # Entire seed range and all held-out parameter combinations are unseen in training.
-    holdout={
-        "unseen_middle":middle,
-        "unseen_cash_labor":replace(middle,search_failure=.18,cash=.66,labor=.49),
-        "unseen_search":replace(middle,search_failure=.66,cash=.88,labor=.92),
-    }
-    return factorial,changes,holdout
-
-
-def summarize(frame, out):
-    keys=["group","condition","strategy"]
-    metrics=["grain_kg","grain_area","idle_area","successor_grain","continuity_area","operator_change",
-             "offered_area","unfilled_area","leased_idle","leased_cash","leased_area","expanded","shrunk",
-             "exits","tenant_profit","owner_income","spending","reward"]
-    world=frame.groupby(keys+["seed"],as_index=False)[metrics].mean()
-    world.to_csv(out/"world_means.csv",index=False)
-    frame.groupby(keys+["year"])[metrics].mean().to_csv(out/"annual_means.csv")
-    summary=world.groupby(keys)[metrics].agg(["mean","std",lambda s:s.quantile(.05),lambda s:s.quantile(.95)])
-    summary.columns=["_".join(x).replace("_<lambda_0>","_p05").replace("_<lambda_1>","_p95") for x in summary.columns]
-    summary.to_csv(out/"distribution.csv")
-    contrasts=[]
-    for (group,condition),rows in world.groupby(["group","condition"]):
-        base=rows[rows.strategy.eq("none")].set_index("seed")
-        for strategy,x in rows.groupby("strategy"):
-            x=x.set_index("seed")
-            for reference in (["none"] if group!="evaluation" else ["none","grain_post","takeover_pre","rule"]):
-                if strategy==reference:
+            actual = (policy or strategy) if year <= active else "none"
+        out, plots, actors, trades = world.step(actual, ledger=True)
+        key = dict(group=group, condition=condition, seed=seed, year=year, strategy=strategy, policy=actual)
+        rows.append(_record(log, world, key, out, plots, actors, trades, state, fallback,
+                            0 if strategy == "none" else active))
+        if group != "duration" or active == YEARS:
+            continue
+        if year <= active:
+            follow.update({p["plot"]: (p, year) for p in plots if p["support"] > 0})
+        elif year <= active + 3:
+            by_id = {a["id"]: a for a in actors}
+            for plot in plots:
+                pid = plot["plot"]
+                if pid not in follow:
                     continue
-                r=base if reference=="none" else rows[rows.strategy.eq(reference)].set_index("seed")
-                assert set(r.index)==set(x.index)
-                for metric in metrics:
-                    delta=x[metric]-r[metric]
-                    n=len(delta)
-                    mean=delta.mean()
-                    half=t.ppf(.975,n-1)*delta.std(ddof=1)/np.sqrt(n)
-                    contrasts.append(dict(group=group,condition=condition,strategy=strategy,reference=reference,
-                        metric=metric,n=n,mean=mean,ci95_low=mean-half,ci95_high=mean+half,positive=int((delta>0).sum())))
-    pd.DataFrame(contrasts).to_csv(out/"paired_effects.csv",index=False)
-    frame.groupby(keys+["policy"]).size().rename("years").to_csv(out/"policy_choices.csv")
-    diag=world[world.group.eq("diagnostic")].pivot(index="seed",columns=["condition","strategy"])
-    mechanism=[]
-    for m in metrics:
-        x=diag[m]
-        comparisons={
-            "timing_only":x["middle","takeover_pre"]-x["middle","takeover_post"],
-            "eligibility_only":x["middle","takeover_pre"]-x["middle","grain_pre"],
-            "feedback_difference_in_differences":
-                (x["middle","takeover_pre"]-x["middle","none"])
-                -(x["no_feedback","takeover_pre"]-x["no_feedback","none"]),
-        }
-        for contrast,delta in comparisons.items():
-            n=len(delta)
-            avg=delta.mean()
-            half=t.ppf(.975,n-1)*delta.std(ddof=1)/np.sqrt(n)
-            mechanism.append(dict(contrast=contrast,metric=m,n=n,mean=avg,ci95_low=avg-half,ci95_high=avg+half))
-    pd.DataFrame(mechanism).to_csv(out/"mechanism_contrasts.csv",index=False)
+                prior, receipt_year = follow[pid]
+                actor = by_id.get(plot["operator"], {})
+                log("withdrawal_cohort", (key | dict(
+                    plot=pid, last_receipt_year=receipt_year, last_paid_operator=prior["operator"],
+                    last_payment=prior["support"], years_after_stop=year-active,
+                    operator=plot["operator"], same_operator=plot["operator"] == prior["operator"],
+                    crop=plot["crop"], physical_area=plot["physical_area"],
+                    grain_kg=plot["harvest"] if plot["crop"] == "grain" else 0.,
+                    profit=actor.get("profit"), closing_cash=actor.get("closing"),
+                ),))
+    return rows
 
 
-def verify_ledgers(out, frame):
-    key=["group","condition","seed","year","strategy","policy"]
-    anchor=frame.set_index(key).sort_index()
-    p=pd.read_csv(out/"plots.csv.gz",usecols=key+["plot","operator","crop","physical_area","planted_area","harvest","support"])
-    assert not p.duplicated(key+["plot"]).any()
-    assert p.loc[p.crop.ne("idle"),"operator"].notna().all()
-    assert (p.planted_area<=p.physical_area).all()
-    p["grain_mu"]=p.planted_area.where(p.crop.eq("grain"),0.)
-    p["grain_yield"]=p.harvest.where(p.crop.eq("grain"),0.)
-    pp=p.groupby(key)[["grain_mu","grain_yield","support"]].sum()
-    np.testing.assert_allclose(pp,anchor[["grain_area","grain_kg","spending"]],rtol=1e-12,atol=1e-7)
-    assert pp.index.equals(anchor.index)
-    a=pd.read_csv(out/"operators.csv.gz",usecols=key+["id","opening","closing","income","consumption","rent_paid",
-                                                       "rent_income","support","farm_days","job_days","labor_capacity"])
-    assert not a.duplicated(key+["id"]).any() and a.closing.ge(0.).all()
-    assert (a.farm_days+a.job_days<=a.labor_capacity+1e-7).all()
-    np.testing.assert_allclose(a.opening+a.income-a.consumption,a.closing,rtol=1e-12,atol=1e-7)
-    sums=a.groupby(key)[["rent_paid","rent_income","support"]].sum()
-    np.testing.assert_allclose(sums.rent_paid,sums.rent_income,rtol=1e-12,atol=1e-7)
-    np.testing.assert_allclose(sums.support,anchor.spending,rtol=1e-12,atol=1e-7)
-    t=pd.read_csv(out/"transactions.csv.gz",usecols=key+["plot","area","buyer","rent"])
-    assert not t.duplicated(key+["plot"]).any()
-    offers=t.groupby(key).area.sum().reindex(anchor.index,fill_value=0.)
-    matches=t[t.buyer.notna()].groupby(key)[["area","rent"]].sum().reindex(anchor.index,fill_value=0.)
-    np.testing.assert_allclose(offers,anchor.offered_area)
-    np.testing.assert_allclose(matches.area,anchor.leased_area)
-    np.testing.assert_allclose(matches.rent,sums.rent_paid,rtol=1e-12,atol=1e-7)
-    receipt=dict(years=len(frame),plots=len(p),operators=len(a),transactions=len(t),checks="passed")
-    (out/"ledger_verification.json").write_text(json.dumps(receipt,indent=2),encoding="utf-8")
+def fixed_contract(seed: int, scenario: Scenario, condition: str, log: Callable) -> None:
+    world = Succession(seed, scenario)
+    for year in range(1, YEARS + 1):
+        state = observation(world)
+        origin = world.fork()
+        out, plots, actors, trades = world.step("none", ledger=True)
+        key = dict(group="fixed_contract", condition=condition, seed=seed, year=year)
+        _record(log, world, key | dict(strategy="none", policy="none"),
+                out, plots, actors, trades, state, available_years=0)
+        contracts = {p["plot"]: tuple(p[field] for field in CONTRACT_FIELDS) for p in plots}
+        opening = {a["id"]: a["opening"] for a in actors}
+        commitments = {}
+        for rule in POLICIES[1:]:
+            copy = origin.fork()
+            result, rows, accounts, transactions = copy.step(rule, ledger=True, fixed=plots)
+            replay = {p["plot"]: tuple(p[field] for field in CONTRACT_FIELDS) for p in rows}
+            if replay != contracts or {a["id"]: a["opening"] for a in accounts} != opening:
+                raise RuntimeError(f"Fixed contract/opening balance changed: {condition}/{seed}/{year}/{rule}")
+            commitments[rule] = {p["plot"]: (p["eligible"], p["commitment"], p["expected_support"]) for p in rows}
+            if rule.endswith("_post") and commitments[rule] != commitments[rule.replace("_post", "_pre")]:
+                raise RuntimeError(f"Fixed eligibility/commitment changed: {condition}/{seed}/{year}/{rule}")
+            _record(log, copy, key | dict(strategy=rule, policy=rule), result, rows, accounts, transactions, state)
 
 
-def run(out, *, ledgers):
-    fact,changes,holdout=designs()
-    out.mkdir(parents=True,exist_ok=False)
-    root=Path(__file__).resolve().parents[1]
-    # Refuse formal RL before internal economic and held-out timing tests pass.
-    subprocess.run([sys.executable,"-B","-m","pytest","-q","-p","no:cacheprovider",
-                    "tests/test_land_succession.py",f"--junitxml={out/'gate.xml'}"],cwd=root,check=True)
-    assert not set(TRAIN_SEEDS)&(set(SEEDS)|set(EVAL_SEEDS)) and not set(fact.values())&set(holdout.values())
-    q,history=train(list(fact.items()))
-    history.to_csv(out/"training_sar.csv",index=False)
-    (out/"q_table.json").write_text(json.dumps({str(k):v for k,v in sorted(q.items())},indent=2),encoding="utf-8")
+@dataclass(frozen=True, slots=True)
+class Experiment:
+    group: str
+    condition: str
+    seed: int
+    scenario: Scenario
+
+
+def run_experiment(job: Experiment) -> Ledgers:
+    entries: Ledgers = {}
+
+    def log(label: str, rows: Iterable[Row]) -> None:
+        entries.setdefault(label, []).extend(rows)
+
+    group, condition, seed, scenario = job.group, job.condition, job.seed, job.scenario
+    if group == "fixed_contract":
+        fixed_contract(seed, scenario, condition, log)
+    elif group == "duration":
+        simulate(seed, scenario, "none", None, log, group, condition)
+        for policy, active in product(POLICIES[1:], (1, 3, YEARS)):
+            simulate(seed, scenario, f"{policy}_y{active}", None, log, group, condition,
+                     policy=policy, active=active)
+    elif group == "plot_order":
+        for order in SOLID_ORDER:
+            simulate(seed, scenario, f"takeover_pre_{order}", None, log, group, condition,
+                     policy="takeover_pre", order=order)
+    else:
+        for strategy in POLICIES + (("rule",) if group == "evaluation" else ()):
+            simulate(seed, scenario, strategy, None, log, group, condition)
+        if group == "evaluation":
+            for learned in EVAL_POLICIES:
+                simulate(seed, scenario, learned.strategy, learned, log, group, condition)
+    return entries
+
+
+EVAL_POLICIES: tuple[LearnedPolicy, ...] = ()
+
+
+def _init_evaluation(policies: tuple[LearnedPolicy, ...]) -> None:
+    global EVAL_POLICIES
+    EVAL_POLICIES = policies
+
+
+def run(out: Path, *, formal: bool, workers: int) -> None:
+    if tuple(POLICIES) != EXPECTED_POLICIES:
+        raise RuntimeError("The final core must expose the ordered P0-P4 policy menu.")
+    cases = designs()
+    seeds = {g: EVAL_SEEDS if g == "evaluation" else
+             SEEDS if g in ("factorial", "fixed_contract") else SENS_SEEDS for g in cases}
+    if not formal:
+        seeds = {g: s[:1] for g, s in seeds.items()}
+    starts = TRAIN_STARTS if formal else TRAIN_STARTS[:1]
+    paths = 2048 if formal else 8
+    train_seeds = {seed for start in starts for offset in (0, 5000)
+                   for seed in range(start + offset, start + offset + 2*paths)}
+    if train_seeds & set(EVAL_SEEDS + SEEDS) or set(cases["factorial"].values()) & set(cases["evaluation"].values()):
+        raise RuntimeError("Learning and evaluation overlap.")
+
+    out.mkdir(parents=True, exist_ok=False)
+    if formal:
+        subprocess.run([sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                        GATE, f"--junitxml={out / 'gate.xml'}"], cwd=ROOT, check=True)
+    files = ("core/land_succession.py", "core/succession_allocation.py", "modules/land_clearing_house.py",
+             "agents/government_agent.py", "scripts/run_land_succession.py", "scripts/succession_q.py",
+             "scripts/succession_analysis.py", GATE)
+    manifest = dict(
+        mode="formal" if formal else "smoke", years=YEARS, workers=workers, policies=POLICIES,
+        seeds=seeds, synthetic=True, train_seed_starts=starts, train_initial_paths=paths,
+        q=dict(weights=WEIGHTS, state=STATE_NAMES, thresholds=THRESHOLDS, rate=LEARNING_RATE,
+               discount=DISCOUNT, common_state_share=COMMON_STATE_SHARE,
+               min_action_visits=MIN_ACTION_VISITS, min_coverage=MIN_COVERAGE,
+               extension_paths=2*paths, aggregation="drop high_spending only",
+               aggregate_seed_offset=5000, reference="physical area times nominal grain yield",
+               area_denominator="fixed physical area", unseen="transparent rule"),
+        withdrawal=dict(horizons=[1, 3, YEARS], followup_years=3,
+                        cohort="plots paid at least once during the support window"),
+        transparent_rule=TRANSPARENT_RULE,
+        command=["python", "-B", "-m", "scripts.run_land_succession",
+                 "../formal" if formal else "../smoke", "--formal" if formal else "--smoke",
+                 "--workers", str(workers)],
+        independent_audit=INDEPENDENT_AUDIT.replace("../formal", "../smoke") if not formal else INDEPENDENT_AUDIT,
+        versions=dict(python=sys.version, numpy=np.__version__),
+        branch=subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip(),
+        head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        worktree_status=subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).splitlines(),
+        scenario={group: {name: asdict(s) for name, s in design.items()} for group, design in cases.items()},
+        files={path: sha256((ROOT / path).read_bytes()).hexdigest() for path in files if (ROOT / path).is_file()},
+    )
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    train_jobs = [TrainingJob(name, i, start, tuple(cases["factorial"].items()), paths)
+                  for name in WEIGHTS for i, start in enumerate(starts, 1)]
+    models = {}
+    q_records = []
+    written: Counter[str] = Counter()
     with ExitStack() as stack:
-        writers={}
-        def log(name,rows):
-            if not ledgers or not rows:
-                return
-            if name not in writers:
-                raw=stack.enter_context((out/f"{name}.csv.gz").open("wb"))
-                compressed=stack.enter_context(gzip.GzipFile(fileobj=raw,mode="wb",mtime=0))
-                s=stack.enter_context(io.TextIOWrapper(compressed,encoding="utf-8",newline=""))
-                writers[name]=csv.DictWriter(s,fieldnames=list(rows[0]))
-                writers[name].writeheader()
-            writers[name].writerows(rows)
-        records=[]
-        for group,scenarios,seeds,strategies in (
-            ("factorial",fact,SEEDS,POLICIES),
-            ("diagnostic",changes,SEEDS,POLICIES+TIMING_CONTROLS),
-            ("evaluation",holdout,EVAL_SEEDS,POLICIES+("rule","q"))):
-            for condition,scenario in scenarios.items():
-                for seed,strategy in product(seeds,strategies):
-                    records.extend(simulate(seed,scenario,strategy,q,log,group,condition))
-            print(group,len(records),"year rows",flush=True)
-    frame=pd.DataFrame(records)
-    frame.to_csv(out/"annual.csv",index=False)
-    summarize(frame,out)
-    if ledgers:
-        verify_ledgers(out,frame)
-    manifest=dict(years=YEARS,experiment_seeds=SEEDS,train_seeds=TRAIN_SEEDS,evaluation_seeds=EVAL_SEEDS,
-        scenario={g:{k:asdict(v) for k,v in cases.items()} for g,cases in
-                 [("factorial",fact),("diagnostic",changes),("evaluation",holdout)]},
-        versions=dict(python=sys.version,numpy=np.__version__,pandas=pd.__version__),
-        files={str(f.relative_to(root)):sha256(f.read_bytes()).hexdigest() for f in
-               [root/"core/land_succession.py",Path(__file__),root/"tests/test_land_succession.py",
-                root/"modules/land_clearing_house.py",root/"agents/government_agent.py"]})
-    (out/"manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
+        writers = {}
+
+        def write(label: str, entries: Iterable[Row]) -> None:
+            for row in entries:
+                if label not in writers:
+                    target = (stack.enter_context((out / f"{label}.csv").open("w", encoding="utf-8", newline=""))
+                              if label in ("annual", "training_checkpoints", "q_visits")
+                              else write_gzip(stack, out / f"{label}.csv.gz"))
+                    writers[label] = csv.DictWriter(target, fieldnames=list(row))
+                    writers[label].writeheader()
+                writers[label].writerow(row)
+                written[label] += 1
+
+        sar = csv.writer(write_gzip(stack, out / "training_sar.csv.gz"))
+        sar.writerow(SAR_FIELDS)
+        ctx = get_context("spawn")
+        with ctx.Pool(workers) as pool:
+            for fitted in pool.imap(train, train_jobs):
+                learned = fitted.policy
+                q_records.append(learned)
+                models[learned.strategy] = dict(
+                    profile=learned.profile, aggregated=learned.aggregated, coverage_passed=learned.coverage_passed,
+                    states={str(s): dict(q=learned.table[s], visits=learned.visits[s]) for s in sorted(learned.visits)},
+                )
+                sar.writerows(fitted.sar)
+                written["training_sar"] += len(fitted.sar)
+                write("training_checkpoints", fitted.checkpoints)
+                write("q_visits", fitted.visits)
+        (out / "q_table.json").write_text(json.dumps(models, indent=2), encoding="utf-8")
+        with ctx.Pool(workers, initializer=_init_evaluation, initargs=(tuple(q_records),)) as pool:
+            for group, design in cases.items():
+                jobs = (Experiment(group, name, seed, case) for name, case in design.items() for seed in seeds[group])
+                before = written["annual"]
+                while batch := tuple(islice(jobs, 2*workers)):
+                    for accounts in pool.imap(run_experiment, batch):
+                        for label, rows in accounts.items():
+                            write(label, rows)
+                print(f"{group}: {written['annual'] - before} year rows", flush=True)
+    (out / "execution.json").write_text(json.dumps(dict(status="completed", rows=written), indent=2), encoding="utf-8")
 
 
-if __name__=="__main__":
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("output",type=Path)
-    parser.add_argument("--summaries-only",action="store_true")
-    args=parser.parse_args()
-    run(args.output.resolve(),ledgers=not args.summaries_only)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     epilog=f"After execution, run the independent audit: {INDEPENDENT_AUDIT}")
+    parser.add_argument("output", type=Path)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--smoke", action="store_true", help="One paired seed per condition, small learning check.")
+    mode.add_argument("--formal", action="store_true", help="Run the gated full experiment.")
+    parser.add_argument("--workers", default=6, type=int, choices=range(1, 9))
+    args = parser.parse_args()
+    run(args.output.resolve(), formal=args.formal, workers=args.workers)

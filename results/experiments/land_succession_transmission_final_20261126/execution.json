@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "rows": {
+    "training_sar": 983040,
+    "training_checkpoints": 480,
+    "q_visits": 20950,
+    "plots": 8966400,
+    "operators": 5969600,
+    "transactions": 1128746,
+    "fiscal": 2821002,
+    "annual": 186800,
+    "withdrawal_cohort": 51984
+  }
+}

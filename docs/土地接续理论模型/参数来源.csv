@@ -1,19 +1,41 @@
 parameter,value,unit,status_and_basis
-owners_and_entrants,24 / 8,synthetic actors,Structural design; not NFPS households or national organization counts
-right_plots,2 x 4,plots x mu per household,Synthetic equal parcels; inherited market quantity unit is one plot
-grain_yield,450,kg/mu,Order-of-magnitude reference to F1 independent CHFS estimates for rice maize and wheat; not an estimated composite
-grain_price_cost,2.50 / 620,CNY per kg / CNY per mu,Common synthetic budget; nominal policy and scenario sensitivity are not current China rates
-cash_yield_price_cost,630 / 2.50 / 940,kg/mu / CNY/kg / CNY/mu,Synthetic competing crop; price and profitability not mapped to a named empirical crop
-crop_peak_days,2.5 / 5,days/mu,Structural relative intensity; published F1 labor analysis covers annual observed work not peak needs
-family_labor,22 to 45,days per peak season,Stylized seasonal subset of annual days; CFPS independent annual reference by job status motivates heterogeneity only
-nonfarm_days_and_wage,8 to 38 / 0 to 185,days / CNY per day,Synthetic availability and realized opportunity; inherited V4 hired wage reference 120 calibrates order only; wages x .7 or 1.3 sensitivity
-owner_and_entrant_cash,3900 to 10000 / 4200 to 15500,CNY per operator,Stylized preplant working capital ranges with comparable plot input scale; no CHFS calibration claim
-search,0.08 / 0.48,probability,Prespecified low and high condition; no geographical interpretation
-ask_and_fee,130 / 280,CNY/mu and CNY/contract,Assumed reservation rent and transaction expense; actual rent determined by marketplace
-entry_and_consumption,1000 / 800 / 1900,CNY,Structural annual startup cost and tenant / owner withdrawals
-postmatch_liquidity,0.68 to 1.00,fraction,Structural uncertainty in immediately usable funds; no deduction from underlying cash
-postmatch_labor,0.45 to 1.07,fraction,Structural uncertainty in realizable peak-season work
-plot_quality,0.83 to 1.17,multiplier,Synthetic fixed heterogeneity; no operator-specific yield advantage
-harvest,0.35 / 0.65 / 1.00 / 1.14,multiplier,Synthetic common shocks with probabilities 0.07 / 0.13 / 0.59 / 0.21
-policy_budget,7200,CNY per year,Same annual ceiling for every active policy; actual expenditures endogenously differ
-nominal_support,85,CNY per verified sown mu,Assumed mechanism experiment; robustness 60 and 120
+owners_and_entrants,24 / 8,权利家庭 / 潜在承接者,结构性假设；继承冻结版合成主体；承接者数量对照 0/4/8/16；不是调查户或企业合作社名录计数；core/land_succession.py::Scenario
+right_plots,2 x 4,每户地块数 x 每块物理亩,结构性假设；合成等面积地块共 48 块/192 亩；市场数量单位为块；租金明细区分元/块和元/亩；Succession.__init__
+initial_grain_probability,0.80,概率,结构性假设；继承初始化抽取；不是调查粮食面积份额；Succession.__init__
+grain_yield,450,公斤/播种亩,结构性假设；CHFS 2014 分粮种亩产仅作量级参照；不估计合成粮种均值、不移植真实生产率；core/succession_allocation.py::CROPS
+grain_price_cost,2.50 / 620,元/公斤 / 元/播种亩,结构性假设；继承外生粮价和播前投入；2016–2017 记录销售/产出/成本口径不同；不是当年市场粮价或配套经验成本；CROPS
+cash_yield_price_cost,630 / 2.50 / 940,公斤/播种亩 / 元/公斤 / 元/播种亩,结构性假设；继承抽象经作；不映射具体蔬果品种或调查利润；CROPS
+crop_peak_days,2.5 / 5,农忙工日/播种亩（粮 / 经）,结构性假设；年投工含农闲和雇工不能校准该系数；无工资雇工替代或机械省工；CROPS
+family_labor,22–45,农忙可支配工日/户,结构性假设；继承均匀抽取；CFPS 年农业工日仅提示异质性；不把年工日换算为农忙上限；Succession.__init__
+entrant_labor,16–50 × 情景乘数,农忙可支配工日/承接者,结构性假设；继承均匀抽取；核心乘数 1.00/0.60；压力和放宽 0.15/3.00；不是购买工日；Succession.__init__
+nonfarm_days_and_wage,8–38 / 0–185,可兑现工日上限 / 元/日,结构性假设；权利家庭合成抽取；外部承接者基准两项均 0；年工资冲击乘数 0.70–1.38；工资敏感性 0.7/1/1.3；旧农业雇工 120 元/日及 CFPS 120 个年农业工日都不是非农工资依据；Succession.__init__
+paid_agricultural_hiring,不启用,工日与元/日分别核算,结构性假设；不把非农工资当雇工工资；若增加须单独核当地农忙同工序的雇工工资/实际工日与可雇数量；joint_allocation
+owner_and_entrant_cash,3900–10000 / 4200–15500,元/经营者,结构性假设；均匀抽取且承接者乘情景系数；核心 1.00/0.56；压力和放宽 0.15/4.00；CHFS 现金与活期不等于可动用周转资金；Succession.__init__
+search,0.08 / 0.48,概率,结构性假设；继承核心 2×2×2 的低/高失败率；中间 0.25；0 和 1 是边界检验；不从 NFPS 分别报告流量倒推；scripts/run_land_succession.py::designs
+ask_and_fee,130 / 280,元/亩 / 元/新合同,结构性假设；130 是保留租价不是成交租金；租价 65/195 与费用 0/560 分设对照；根据信息与报价内生清算；Scenario
+entry_and_consumption,1000 / 800 / 1900,元/经营年 / 元/承接者年度提取 / 元/权利户年度提取,结构性假设；经营租入土地年度启动成本与实际由可用余额限制的提取；启动 0/2000 对照；不解释为福利或经验消费；Succession.step
+postmatch_liquidity,0.68–1.00,可用于播前的现金比例,结构性假设；交易后可用资金不等于账面现金；未使用部分不注销；Succession.step
+postmatch_labor,0.45–1.07,可实现劳动乘数,结构性假设；继承冲击范围；农业与非农时段不重复；Succession.step
+plot_quality,0.83–1.17,乘数,结构性假设；固定合成地块质量；并非经营者生产率；Succession.__init__
+harvest,0.35 / 0.65 / 1.00 / 1.14,乘数,结构性假设；共同收获冲击；概率 0.07/0.13/0.59/0.21；无天气实测拟合；Succession.step
+policy_budget,7200,元/年,结构性假设；共同年度上限；360/20000 对照；零预算作边界测试；实付和结余分别列；Scenario
+nominal_support,85,元/核实粮食播种亩（名义）,结构性假设；继承政策实验标称值；60/85/120 在基准预算都被压至 150 元/块而不改变有效支持；非正式政策标准；Scenario
+per_plot_guarantee,150（基准）,元/合格实种地块,结构性假设；全地块均可兑现的事前固定上限 min(名义标准×块亩数;年度预算/区域总块数;该块粮食投入)；不按资格数或实种数阶段加价；基准 150 元/块等于 37.5 元/亩；Succession.step
+contract_duration,1 / 3,年,结构性假设；一年基准三年对照；期限内不重竞租或重复给首次承接款；合同逾期与提前违约分别入账；不是全国期限分布；Scenario.contract_years
+unmatched_recovery,关 / 开；120 / 2,状态；元/恢复地块 / 农忙工日/恢复地块,结构性假设；基准未成交不回撤；对照在播种前为原权利家庭恢复生产但占用实际资源；若仍不可行不实种；Succession.step
+exit_and_reentry,资金低于启动+保留租金+费用 / 退出年+2,元门槛 / 模拟年份,结构性假设；潜在承接者有租约且余额低于门槛才退出；再进入默认关闭；开启时经过一个完整退出年后可补至其合成初始资金并恢复报价资格；资金另记不是财政补贴；不把恢复资格当实际承接；Succession.step
+carry_cash_and_exit,均保留 / 各自重置 / 同时重置,状态,结构性假设；不重置地块身份和种植历史；两种跨期反馈分离；Scenario 与 designs
+policy_menu,P0/P1/P2/P3/P4,离散动作,结构性假设；无专项/全部种粮播前/全部种粮产后/合格新承接者播前/合格新承接者产后；新承接按地块变化判定；固定、透明和政府Q共用；POLICIES
+policy_horizon,1 / 3 / 8；停止后追踪 1–3,年,结构性假设；与 1/3 年合同期限分别设定；逐年确认是否仍支付；scripts/run_land_succession.py
+government_reward_and_state,1 / 0.18 / 0.14；0.55 / 0.35 / 0.05 / 0.70,奖励权重；状态阈值,结构性假设；基准奖励含标准化产量、严格接续及实际支出惩罚；权重对照加倍接续或财政项；状态还有剩余期限；阈值依次为粮产量/满亩参考产量、未成交/释放、严格接续/区域土地、实付/预算；scripts/succession_q.py
+nfps_land_reference_2015,874.3 / 321.8 / 963,亩,统计估计（审计样本描述）；分别实报的合计差/同户双报净流量/有期初期末存量净增；对应转入62户与转出83户/34户/469户；只作账务口径参照；F1 run_01/survey_land_coverage.csv
+nfps_exit_reference,20 / 2,户年,统计估计（审计样本描述）；2010–2014 正记录剩余且口径全的纯粮户年/下年无播种；不代表永久退出率；f1_validity_20261126/nfps_exit.csv 及 nfps_exit_coverage.csv
+cfps_annual_agricultural_time,180 / 120,年农业工日中位数,统计估计（审计样本描述）；CFPS 2010 成人无/有报告有酬非农工作分别 5708/834 条；qh1×qh2；非农日工资和可能被挤出的农忙工日均未识别；f1_validity_20261126/cfps_labor_reference.csv
+cfps_exit_reference,4067 / 444,户,统计估计（审计样本描述）；2012 正记录剩余/2014 不再种植或林业；独立于 NFPS；不能据此估非农就业对退出的效应；f1_validity_20261126/cfps_exit.csv
+chfs_crop_yield_reference,500 / 400 / 500,公斤/亩中位数（稻谷 / 小麦 / 玉米）,统计估计（审计样本描述）；CHFS 2015 户表回顾 2014；面积为亩、产出面积为正；2136/1904/3900 条；只参照不校准；F1 run_01/chfs_crop_yield_reference.csv
+chfs_cash_reference,1757.71,2024元/户中位数,统计估计（审计样本描述）；2011 CHFS 农业参与组现金和活期可比 2863 户；不是授信与可立即动用播前资金；F1 run_01/liquidity_parameters.csv
+crop_budget_reference,76 / 58,稻谷预算记录（2016 / 2017）,统计估计（审计样本描述）；实际销售、投入、农业雇工和机械的分母分开；不补缺项或拟合统一价格；first_paper_20261122/evidence/budget_year_crop.csv
+registered_organizations_reference,4085 / 69,安徽2023登记候选（公司 / 合作社）,统计估计（登记记录经既定标签筛选计数）；非全国基期在营主体；有服务活动不必直接种粮；docs/全国模型主体规则与过程追溯审查.md
+policy_documents_reference,2021年第1号 / 2023年春耕公告,文件版本,直接观测（正式规则）；流转期限价款协商、经营者与承包权分开及实际种粮政策对象；无本模型数值标定；出处见文献与参数证据
+incomplete_market_reference,不移植数值,机制依据,文献依据；de Janvry 等（1991）不完全市场；农业劳动约束与可兑现的非农机会收入分开；不将农业工资直接当影子工资
+external_calibration_adopted,无,未启用,外部数据校准类别未使用；NFPS/CFPS/CHFS/作物预算/名录只是独立证据参照
