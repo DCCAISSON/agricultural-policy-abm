@@ -1,5 +1,33 @@
 # 统一共同预算模型复算
 
+## 本轮四区接续
+
+执行版本以本地 `358bdf9` 为父。使用[登记协议](sprint_protocol.json)和[农业冻结选择](agricultural_freeze.json)，不把下面的旧540xxx、550xxx、560xxx种子用于本轮评价。原四区版本命令从原 `358bdf9` 树执行。新结果的唯一正式入口仍为 `scripts.run_succession_empirical_budget` 的 `train/evaluate`。先看[家庭修订与口径](家庭修订与口径.md)及[四项裁决](冲刺结果与裁决.md)。
+
+从复现包的 `source` 目录执行。目录名须新建，`$Project` 指向授权原表和冻结档案所在的项目根：
+
+```powershell
+$env:OPENBLAS_NUM_THREADS='1'
+$env:OMP_NUM_THREADS='1'
+python -B -X utf8 -m scripts.diagnose_succession_sprint $Project hist_m1
+python -B -X utf8 -m scripts.diagnose_succession_sprint $Project hist_trial --refine
+python -B -X utf8 -m scripts.run_succession_empirical_budget train $Project new_train --workers 14
+python -B -X utf8 -m scripts.run_succession_empirical_budget evaluate $Project new_eval --trained new_train --workers 14
+python -B -X utf8 -m scripts.audit_succession_empirical_budget new_train new_eval new_audit
+python -B -X utf8 -m scripts.check_succession_empirical_households $Project new_train protected_trace --evaluation new_eval --seed 574001
+python -B -m pytest -q -p no:cacheprovider tests --junitxml=tests-recomputed.xml
+```
+
+未取得微观资料，仍可用包内源表重新计算训练筛选、主策略和稳定性复拟、执行时的滞后状态及Q值、财政账户、结果区间：
+
+```powershell
+python -B -X utf8 -m scripts.audit_succession_empirical_budget ../evidence/training ../evidence/evaluation checked
+```
+
+`screen.csv.gz` 记录哪些不同父路径年初被选入；`openings.csv.gz` 每次入选均分叉21动作；`frozen.json` 保存每个受支持状态的当年期望粮食、Q值和动作，以及低支持状态的估计记录。评价地区年度账同时记录实际动作、期初公开状态、是否回退及所选动作估值；固定政策和制度强制P0不填Q值。保护目录中的逐户与逐合成块日志只在授权环境生成。重复训练依登记去掉父种子可被4整除的子集，保持算法与奖励不变；不是一批独立的现实数据或额外可供挑选的主结果。
+
+## 继承机制（原四区版）
+
 本版用 F1 冻结队列的600户初始化同一个经济环境。四个政策区是东部、中部、西部和东北；省级样本内有独立的土地供需撮合，只有年度预算跨政策区竞争。既有全国F1复现、单区7a、两区首年拨款和前六年分配试验保持冻结，不视作本版不同配置。
 
 ## 输入与源码
@@ -15,7 +43,7 @@
 
 上限为联合样本物理亩乘18.75并向下取整，不是实际行政预算。样本初始粮食用调查合计作为公共滞后状态；以后使用模型实际产量。主实验第1至第8年同样可选全部动作。停付试验在相同第六年结束状态，从第七年起统一选P0；对比原策略连续执行和始终P0。面积累加列为亩年，现金库存优先看逐年地区账，不将跨年累计库存解释为期末余额。
 
-## 复算
+## 原四区复算（仅在冻结父树）
 
 从包的 `source` 目录执行，`$Project` 指向具备授权微观原表和原冻结归档的项目根。程序核验指纹且输出目录必须不存在。原始户表、户号、逐户现金和逐地账均不在复现包。
 

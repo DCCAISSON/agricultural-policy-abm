@@ -1,0 +1,5 @@
+seed,year,comparable,offers_land,bids,rents_in,operating,sown,mixed,mixed_feasible,implementation_has_gain,exact_convert_to_mixed,mixed_feasible_but_no_strict_mixed_improvement,fewer_than_two_lots,cash,labor
+301,2011,569,112,39,19,510,507,20,395,43,27,368,139,13,2
+301,2015,534,84,42,29,450,450,13,373,47,20,353,147,0,1
+309,2011,569,114,36,16,508,507,20,388,45,22,366,144,12,5
+309,2015,534,94,39,29,447,447,10,371,52,23,348,149,1,3

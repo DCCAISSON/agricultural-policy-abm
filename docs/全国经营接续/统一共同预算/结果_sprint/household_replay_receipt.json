@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "seed": 574001,
+  "households": 28800,
+  "lots": 106080,
+  "region_years": 192,
+  "scope": "strongest fixed, same-info myopic and Q; 8 years each in main and withdrawal; private rows not distributable"
+}

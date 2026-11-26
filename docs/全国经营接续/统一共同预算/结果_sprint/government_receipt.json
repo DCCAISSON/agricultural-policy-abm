@@ -1,0 +1,225 @@
+{
+  "status": "passed",
+  "region_years": 46080,
+  "paths": 1440,
+  "seed_count": 48,
+  "coverage": {
+    "screened_openings": 2304,
+    "opening_visits": 784,
+    "distinct_states": 110,
+    "common_state_actions": 1428,
+    "supported_common_state_actions": 1428,
+    "all_visited_action_support": 0.7272727272727273,
+    "coverage": 1.0,
+    "opening_weighted_support": 0.9657118055555556,
+    "by_remaining_year": [
+      {
+        "remaining": 8,
+        "screened": 288,
+        "common": 1,
+        "supported_common": 1,
+        "all_states": 1
+      },
+      {
+        "remaining": 7,
+        "screened": 288,
+        "common": 10,
+        "supported_common": 10,
+        "all_states": 16
+      },
+      {
+        "remaining": 6,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 15
+      },
+      {
+        "remaining": 5,
+        "screened": 288,
+        "common": 10,
+        "supported_common": 10,
+        "all_states": 16
+      },
+      {
+        "remaining": 4,
+        "screened": 288,
+        "common": 11,
+        "supported_common": 11,
+        "all_states": 15
+      },
+      {
+        "remaining": 3,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 16
+      },
+      {
+        "remaining": 2,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 16
+      },
+      {
+        "remaining": 1,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 15
+      }
+    ],
+    "common_frequency": 0.02
+  },
+  "coverage_pass": true,
+  "same_information_refit": true,
+  "repeat_refit": true,
+  "initial_coverage": {
+    "screened_openings": 1152,
+    "opening_visits": 602,
+    "distinct_states": 103,
+    "common_state_actions": 1638,
+    "supported_common_state_actions": 1218,
+    "all_visited_action_support": 0.5631067961165048,
+    "coverage": 0.7435897435897436,
+    "opening_weighted_support": 0.9097222222222222,
+    "by_remaining_year": [
+      {
+        "remaining": 8,
+        "screened": 144,
+        "common": 1,
+        "supported_common": 1,
+        "all_states": 1
+      },
+      {
+        "remaining": 7,
+        "screened": 144,
+        "common": 9,
+        "supported_common": 8,
+        "all_states": 13
+      },
+      {
+        "remaining": 6,
+        "screened": 144,
+        "common": 11,
+        "supported_common": 9,
+        "all_states": 14
+      },
+      {
+        "remaining": 5,
+        "screened": 144,
+        "common": 13,
+        "supported_common": 8,
+        "all_states": 15
+      },
+      {
+        "remaining": 4,
+        "screened": 144,
+        "common": 13,
+        "supported_common": 9,
+        "all_states": 14
+      },
+      {
+        "remaining": 3,
+        "screened": 144,
+        "common": 11,
+        "supported_common": 8,
+        "all_states": 15
+      },
+      {
+        "remaining": 2,
+        "screened": 144,
+        "common": 11,
+        "supported_common": 8,
+        "all_states": 16
+      },
+      {
+        "remaining": 1,
+        "screened": 144,
+        "common": 9,
+        "supported_common": 7,
+        "all_states": 15
+      }
+    ],
+    "common_frequency": 0.02
+  },
+  "repeat_coverage": {
+    "screened_openings": 2304,
+    "opening_visits": 591,
+    "distinct_states": 110,
+    "common_state_actions": 1428,
+    "supported_common_state_actions": 1323,
+    "all_visited_action_support": 0.5909090909090909,
+    "coverage": 0.9264705882352942,
+    "opening_weighted_support": 0.9275173611111112,
+    "by_remaining_year": [
+      {
+        "remaining": 8,
+        "screened": 288,
+        "common": 1,
+        "supported_common": 1,
+        "all_states": 1
+      },
+      {
+        "remaining": 7,
+        "screened": 288,
+        "common": 10,
+        "supported_common": 9,
+        "all_states": 16
+      },
+      {
+        "remaining": 6,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 15
+      },
+      {
+        "remaining": 5,
+        "screened": 288,
+        "common": 10,
+        "supported_common": 8,
+        "all_states": 16
+      },
+      {
+        "remaining": 4,
+        "screened": 288,
+        "common": 11,
+        "supported_common": 10,
+        "all_states": 15
+      },
+      {
+        "remaining": 3,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 16
+      },
+      {
+        "remaining": 2,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 8,
+        "all_states": 16
+      },
+      {
+        "remaining": 1,
+        "screened": 288,
+        "common": 9,
+        "supported_common": 9,
+        "all_states": 15
+      }
+    ],
+    "common_frequency": 0.02
+  },
+  "common_budget": 98953,
+  "three_primary_outcomes_per_comparison": true,
+  "checks": [
+    "common initial state",
+    "fiscal mask and frozen choices",
+    "lagged grain only",
+    "regional cash, rent, land and planting accounting",
+    "withdrawal matched prefix and zero payments"
+  ]
+}

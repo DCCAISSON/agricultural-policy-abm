@@ -1,8 +1,10 @@
 """Audit detailed accounts and describe historical correspondence without refitting."""
 
 import argparse
+import csv
 from collections import defaultdict
 from dataclasses import replace
+import gzip
 import json
 from math import fsum,isclose
 from pathlib import Path
@@ -117,9 +119,67 @@ def run(project: Path, trained: Path, out: Path) -> None:
         history="four prespecified first fixed development seeds, P0, first five years; no parameters fitted"))
 
 
+def trace(project: Path, training: Path, evaluation: Path, out: Path, seed: int) -> None:
+    """Reproduce one complete policy bank in the authorized environment."""
+    from scripts.audit_succession_annual_allocation import gz_csv
+    from scripts.run_succession_empirical_budget import METRICS,policy_step
+
+    design,_,_=settings()
+    assets,_=prepare(project,design)
+    budget=make_budget(assets,design)
+    menu=budget.menu()
+    frozen=json.loads((training/"frozen.json").read_bytes())
+    comp=f"fixed_{frozen['strong_fixed']:02}"
+    lookup={(r["mode"],r["strategy"],int(r["year"]),r["region"]):r
+        for r in gz_csv(evaluation/"region_year.csv.gz") if int(r["seed"])==seed}
+    out.mkdir(parents=True,exist_ok=False)
+    private=out/"PRIVATE_DO_NOT_SHARE"
+    private.mkdir()
+    counts=defaultdict(int)
+    outputs={"households":{},"lots":{}}
+    for mode in ("main","withdrawal"):
+        for strategy in (comp,"myopic","q"):
+            worlds=worlds_at_start(seed,assets,design)
+            for year in range(1,9):
+                state=state_key(public_state(worlds,design,budget))
+                a,why=policy_step(strategy,state,frozen,mode,year,design)
+                for asset,world,(instrument,cap) in zip(assets,worlds,menu[a],strict=True):
+                    scenario=world.scenario
+                    world.scenario=replace(scenario,budget=cap)
+                    row,lots,actors,_=world.step(instrument,ledger=True)
+                    world.scenario=scenario
+                    check_accounts(world,row,lots,actors)
+                    target=lookup[mode,strategy,year,asset.name]
+                    assert (target["action"],target["state"],target["reason"])==(str(a),state,why)
+                    assert all(isclose(float(target[k]),row[k],rel_tol=1e-12,abs_tol=1e-7) for k in METRICS)
+                    meta=dict(seed=seed,mode=mode,strategy=strategy,year=year,region=asset.name,action=a)
+                    for name,data in (("households",actors),("lots",lots)):
+                        cols=outputs[name]
+                        if not cols:
+                            cols.update(dict.fromkeys([*meta,*data[0]]))
+                            header=True
+                        else:
+                            header=False
+                        with gzip.open(private/f"{name}.csv.gz","at",encoding="utf-8",newline="") as f:
+                            w=csv.DictWriter(f,cols)
+                            if header:
+                                w.writeheader()
+                            w.writerows(dict(meta,**r) for r in data)
+                        counts[name]+=len(data)
+                    counts["region_years"]+=1
+    json_write(out/"receipt.json",dict(status="passed",seed=seed,**counts,
+        scope="strongest fixed, same-info myopic and Q; 8 years each in main and withdrawal; private rows not distributable"))
+
+
 if __name__=="__main__":
     cli=argparse.ArgumentParser(description=__doc__)
     for key in ("project","trained","out"):
         cli.add_argument(key,type=Path)
+    cli.add_argument("--evaluation",type=Path)
+    cli.add_argument("--seed",type=int)
     args=cli.parse_args()
-    run(args.project,args.trained,args.out)
+    if args.evaluation:
+        trace(args.project,args.trained,args.evaluation,args.out,
+              args.seed if args.seed is not None else settings()[0]["evaluation_seeds"][0])
+    else:
+        run(args.project,args.trained,args.out)

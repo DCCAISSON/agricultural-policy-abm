@@ -1,6 +1,8 @@
 """Read-only historical bridge and exact conditional crop-choice screen."""
 
 import argparse
+import csv
+import gzip
 from collections import Counter, defaultdict
 import json
 from math import fsum
@@ -106,7 +108,7 @@ def model_year(worlds, diagnostic: bool, comparable: set) -> tuple[dict, Counter
     return accounts,funnel
 
 
-def run(project: Path, out: Path, refine: bool = False) -> None:
+def run(project: Path, out: Path, refine: bool = False, private: bool = False) -> None:
     lock=json.loads(PROTOCOL.read_bytes())
     design=settings()[0]
     design["crop_refinement"]=refine
@@ -124,6 +126,8 @@ def run(project: Path, out: Path, refine: bool = False) -> None:
     protocol=json.loads((DESIGN.parent/"../validation_protocol.json").read_bytes())
     thresholds=protocol["thresholds"]
     comparisons, screen, annual=[],[],[]
+    if private:
+        (out/"PRIVATE_DO_NOT_SHARE").mkdir()
     for seed in seeds_of(lock["historical_seeds"]):
         worlds=worlds_at_start(seed,assets,design)
         archive=pd.read_csv(prefix/f"F1_land_bridge_{seed}.csv",dtype={"id":"string"})
@@ -136,6 +140,13 @@ def run(project: Path, out: Path, refine: bool = False) -> None:
             valid=linked.sow_food.ge(0)&linked.sow_cash.ge(0)
             diagnostic=not refine and seed in lock["screening_seeds"] and year in lock["screening_years"]
             simulated,funnel=model_year(worlds,diagnostic,set(linked.index[valid]))
+            if private:
+                with gzip.open(out/"PRIVATE_DO_NOT_SHARE"/"household_decisions.csv.gz","at",encoding="utf-8",newline="") as stream:
+                    writer=csv.DictWriter(stream,["seed","year","actor","survey_matched",*next(iter(simulated.values()))])
+                    if seed==lock["historical_seeds"][0] and year==2011:
+                        writer.writeheader()
+                    writer.writerows(dict(seed=seed,year=year,actor=k,survey_matched=int(k in linked.index),**v)
+                                     for k,v in simulated.items())
             if diagnostic:
                 screen.append(dict(seed=seed,year=year,**funnel))
             model_label="M2_search" if refine else "M1"
@@ -181,5 +192,6 @@ if __name__=="__main__":
     parser.add_argument("project",type=Path)
     parser.add_argument("output",type=Path)
     parser.add_argument("--refine",action="store_true")
+    parser.add_argument("--private-ledger",action="store_true")
     args=parser.parse_args()
-    run(args.project,args.output,args.refine)
+    run(args.project,args.output,args.refine,args.private_ledger)
