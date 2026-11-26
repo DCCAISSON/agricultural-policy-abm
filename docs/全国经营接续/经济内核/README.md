@@ -6,6 +6,8 @@
 
 主检验均无新增专项，沿用 571001–571004 的共同冲击并覆盖 2011–2015：M1 冻结规则、旧技术参数配同一新决策账、以及具名活动预算候选。后两项的差不是单一价格效应；同时改变了作物菜单和投入、产量及劳动定义。同期实际经营亩、年度播种亩次、三种谷物公斤与调查全部粮食公斤不能混用。三组不是正式政策比较。
 
+旧四区实际调用的是 `core/succession_allocation.py` 的合成两作物预算：粮、经价格均 2.50 元/公斤，扣播前投入后分别剩 505、635 元/亩，尚未扣劳动、租金或费用。两个价格相等不是数学错误，但原现金作物没有可核实的产品身份。更早环境的默认值 1.25 和 1.80 元/斤没有被四区调用，也不是经过本轮核实的实际销售价格，未直接移植。
+
 ## 参数与来源
 
 | 规则或参数 | 证据等级与实际来源 | 使用限制 |
@@ -25,6 +27,7 @@
 - activity_evidence.csv、enabled_parameters.csv、dictionary_trace.csv：实读字段、有效分母和实际生效单位。
 - household_history.csv：逐年、规格、种子的同户汇总，不含户号。region_year.csv、crop_year.csv：地区年度账及具名作物实物量。
 - opening_resource_sensitivity.csv：固定已知期初土地组合上的资源对照。nfps_reported_land_scope.csv：两项均报告的地租流转记录及单独的期初期末面积分母。
+- member_labor_coverage.csv：核对成员辞典及原表，分别列有效记录及真实零。2010 年的 80,061 条成员记录里，本村农业、非农用工和外出收入均无报告，外出工日有 19,065 条；全年外出劳动不能换算成家户农忙可用工日。
 - ISSUE_REGISTER.csv 逐项对照独立纠错报告的 29 项；ODD+D.md 说明行为和年度顺序。
 
 ## 复算
@@ -37,6 +40,7 @@ $env:OMP_NUM_THREADS='1'
 $env:OPENBLAS_NUM_THREADS='1'
 python -m scripts.run_succession_economic_core --project <原工程> --out <新目录> --workers 8
 python -m scripts.check_succession_core_resources --project <原工程> --out <另一个新目录>
+python -m scripts.audit_succession_economic_core --main <结果> --replay <干净树结果> --resources <资源对照> --replayed-resources <干净树资源对照> --out <核验目录>
 python -m pytest -q tests/test_succession_economic_core.py tests/test_succession_sprint.py tests/test_succession_empirical_budget.py tests/test_land_succession.py tests/test_land_succession_transmission.py tests/test_succession_shared_budget.py
 ```
 

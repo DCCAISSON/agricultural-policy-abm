@@ -110,6 +110,17 @@ def offer(plot, policy, rate, *, takeover=False):
     return CropOffer(plot.id, plot.quality, g, g if policy.endswith("_pre") else 0., area=plot.area)
 
 
+def gain_bound(base, activities, incoming, expense):
+    """Extend the old LP dual by a land multiplier for each incoming lot."""
+    def land(p):
+        return p.area*max(0.,max((
+            a.kg*a.unit_value*p.quality-a.inputs*(1.+base.cash_shadow)-a.days*base.time_shadow+
+            ((p.grant+base.cash_shadow*p.credit)/p.area if a.grain else 0.)
+            for a in activities
+        ),default=0.))
+    return fsum(land(p) for p in incoming)-(1.+base.cash_shadow)*expense
+
+
 def clear_packages(world, listed, kept, opening, labor, wage, old, held, policy, rate):
     """Rank feasible incremental packages at the posted rent, within provinces.
 
@@ -136,8 +147,10 @@ def clear_packages(world, listed, kept, opening, labor, wage, old, held, policy,
     for region, lots in sorted(pending.items()):
         buyers = [k for k, a in sorted(world.operators.items())
                   if a.market == region and k not in world.closed and available[k] > 0 and labor[k] > 0]
+        activities = tuple(a for a in s.economics.activities if not a.markets or region in a.markets)
         lots.sort(key=lambda p: (-p.quality, -p.area, p.id))
         base_cache = {}
+        forecast_cache = {}
         while lots:
             first = lots.pop(0)
             group = [first, *lots[:3]]
@@ -161,8 +174,7 @@ def clear_packages(world, listed, kept, opening, labor, wage, old, held, policy,
                         terms = offer(p,instrument,support,takeover=old.get(p.id)!=k)
                         return p.area*max((max(0., a.kg*a.unit_value*p.quality-a.inputs+
                                                (terms.grant/p.area if a.grain else 0.))
-                                           for a in s.economics.activities
-                                           if not a.markets or region in a.markets), default=0.)
+                                           for a in activities), default=0.)
                     future_value = fsum(upper_value(p,"none",0.) for p in additions)-rent
                     future_bound = fsum(.95**h*(future_value-(0. if any(end>=world.year+h for end,_,_
                                                                        in ongoing[k]) else s.start_cost))
@@ -176,37 +188,40 @@ def clear_packages(world, listed, kept, opening, labor, wage, old, held, policy,
                                                   wage[k], world.operators[k].job_days,region)
                         base = base_cache[k]
                     incoming = tuple(offer(p, policy, rate, takeover=old.get(p.id) != k) for p in additions)
-                    if s.economics.hired_limit==0.:
-                        # Extend the base LP dual with a land multiplier for
-                        # each incoming offer: this bounds the gain without
-                        # solving an unprofitable enlarged portfolio.
-                        def bound(p):
-                            return p.area*max(0.,max((
-                                a.kg*a.unit_value*p.quality -
-                                a.inputs*(1.+base.cash_shadow)-a.days*base.time_shadow+
-                                ((p.grant+base.cash_shadow*p.credit)/p.area if a.grain else 0.)
-                                for a in s.economics.activities if not a.markets or region in a.markets
-                            ),default=0.))
-                        if fsum(bound(p) for p in incoming)-(1.+base.cash_shadow)*expense+future_bound <= EPS:
-                            continue
+                    current_bound = gain_bound(base,activities,incoming,expense)
+                    if s.economics.hired_limit==0. and current_bound+future_bound <= EPS:
+                        continue
+                    # Future feasibility uses stationary opening resources
+                    # rather than realized cash, weather or a promised grant.
+                    follow_on = tuple(offer(p,"none",0.) for p in additions)
+                    future = []
+                    for h in range(1,s.contract_years):
+                        if (k,h) not in forecast_cache:
+                            carry = [(r,p) for end,r,p in ongoing[k] if end>=world.year+h]
+                            prior = fsum(r for r,p in carry) + (s.start_cost if carry else 0.)
+                            existing = own.get(k,())+tuple(p for _,p in carry)
+                            later = solve(s.economics,existing,world.cash[k]-prior,labor[k],wage[k],
+                                          world.operators[k].job_days,region)
+                            forecast_cache[k,h] = prior, bool(carry), existing, later
+                        prior, carry, existing, later = forecast_cache[k,h]
+                        due = prior+rent+(0. if carry else s.start_cost)
+                        if due > world.cash[k]+EPS:
+                            break
+                        future.append((h,prior,due,existing,later))
+                    if len(future)!=s.contract_years-1:
+                        continue
+                    if s.economics.hired_limit==0. and current_bound+fsum(
+                        .95**h*gain_bound(later,activities,follow_on,due-prior)
+                        for h,prior,due,_,later in future
+                    ) <= EPS:
+                        continue
                     trial = solve(s.economics, plans.get(k, ())+incoming, available[k]-expense,
                                   labor[k], wage[k], world.operators[k].job_days,region)
                     gain = trial.value-base.value-expense
                     if not all(p.id in trial.area for p in additions):
                         continue
-                    # Future feasibility uses stationary opening resources
-                    # rather than future realized cash, yields or a promised grant.
-                    for h in range(1,s.contract_years):
-                        carry = [(r,p) for end,r,p in ongoing[k] if end>=world.year+h]
-                        prior = fsum(r for r,p in carry) + (s.start_cost if carry else 0.)
-                        due = prior+rent+(0. if carry else s.start_cost)
-                        if due > world.cash[k]+EPS:
-                            gain = float("-inf")
-                            break
-                        existing = own.get(k,())+tuple(p for _,p in carry)
-                        later = solve(s.economics,existing,world.cash[k]-prior,labor[k],wage[k],
-                                      world.operators[k].job_days,region)
-                        follow = solve(s.economics,existing+tuple(offer(p,"none",0.) for p in additions),
+                    for h,prior,due,existing,later in future:
+                        follow = solve(s.economics,existing+follow_on,
                                        world.cash[k]-due,labor[k],wage[k],world.operators[k].job_days,region)
                         gain += .95**h*(follow.value-later.value-(due-prior))
                     if gain > EPS:
@@ -221,6 +236,8 @@ def clear_packages(world, listed, kept, opening, labor, wage, old, held, policy,
             available[winner] -= expense
             plans[winner] = plans.get(winner, ())+incoming
             del base_cache[winner]
+            for h in range(1,s.contract_years):
+                forecast_cache.pop((winner,h),None)
             won = {p.id for p in package}
             lots = [p for p in lots if p.id not in won]
             for p in package:

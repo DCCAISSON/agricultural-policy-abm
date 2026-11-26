@@ -5,7 +5,7 @@ import pytest
 from core.land_succession import Operator, Plot, Scenario, Succession
 from core.regional_succession_budget import RegionalBudget
 from core.succession_allocation import CropOffer
-from core.succession_economic_core import Activity, EconomicCore, LEGACY_ACTIVITIES, solve
+from core.succession_economic_core import Activity, EconomicCore, LEGACY_ACTIVITIES, gain_bound, solve
 from scripts.run_succession_economic_core import audit
 
 
@@ -96,6 +96,16 @@ def test_mixed_plan_feasible_and_uses_only_physical_land():
     assert dict((c.name,n) for c,n in plan.area["one"]) == pytest.approx({"wheat":10/3,"vegetables":2/3})
     assert plan.days == pytest.approx(6)
     assert plan.cash <= 500
+
+
+def test_shadow_pruning_is_an_upper_bound_on_exact_increment():
+    econ = LEGACY_ACTIVITIES
+    p = [CropOffer("own",.93,area=4.)]
+    new = [CropOffer("new",1.12,grant=80,credit=80,area=2.)]
+    for cash,days in ((400,10),(900,8),(3000,4),(3000,20),(10000,50)):
+        base = solve(econ,p,cash,days,15,5)
+        trial = solve(econ,p+new,cash-200,days,15,5)
+        assert trial.value-base.value-200 <= gain_bound(base,econ.activities,new,200)+1e-7
 
 
 def test_cash_timing_annual_budget_and_crop_payment():
