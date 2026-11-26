@@ -40,8 +40,16 @@ def audit(main,replay,resources,replayed_resources,out):
     assert not out.exists()
     out.mkdir(parents=True,exist_ok=False)
     summary.to_csv(out/"annual_means.csv",index=False,lineterminator="\n")
+    activities = pd.read_csv(main/"activity_evidence.csv")
+    thin_wage = activities.hire_complete_positive.lt(5)
+    activities.loc[thin_wage,"hired_wage_p50_2024"] = float("nan")
+    activities.to_csv(out/"activity_evidence.csv",index=False,lineterminator="\n")
+    sensitivity = pd.read_csv(resources/"opening_resource_sensitivity.csv")
+    thin_cells = sensitivity.households.lt(5)
+    sensitivity.loc[~thin_cells].to_csv(out/"opening_resource_sensitivity.csv",index=False,lineterminator="\n")
     json_write(out/"verification.json",dict(path_rows=len(history),regional_annual_rows=len(regions),
         matching_main_artifacts=files,matching_resource_artifacts=resource_files,RL_trained=False,policy_ranked=False,
+        suppressed_wages=int(thin_wage.sum()),suppressed_resource_rows=int(thin_cells.sum()),
         scope="same seed/program deterministic check, not independent empirical validation"))
 
 

@@ -28,6 +28,7 @@
 - household_history.csv：逐年、规格、种子的同户汇总，不含户号。region_year.csv、crop_year.csv：地区年度账及具名作物实物量。
 - opening_resource_sensitivity.csv：固定已知期初土地组合上的资源对照。nfps_reported_land_scope.csv：两项均报告的地租流转记录及单独的期初期末面积分母。
 - member_labor_coverage.csv：核对成员辞典及原表，分别列有效记录及真实零。2010 年的 80,061 条成员记录里，本村农业、非农用工和外出收入均无报告，外出工日有 19,065 条；全年外出劳动不能换算成家户农忙可用工日。
+- grain_labor_marginal_coverage.csv：预算完整样本与只要求播种和投工均为正的较宽分母。玉米分别为 21.26 和 9.32 日/亩，这一差异说明完整记录选择影响工日口径；本轮保留原候选不反调工日。
 - ISSUE_REGISTER.csv 逐项对照独立纠错报告的 29 项；ODD+D.md 说明行为和年度顺序。
 
 ## 复算

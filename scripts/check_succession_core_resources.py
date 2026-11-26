@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.succession_economic_core import offer, solve
-from scripts.estimate_succession_activity_budgets import DICT_EARLY, EARLY, HOUSEHOLD, LINK, estimate
+from scripts.estimate_succession_activity_budgets import DICT_EARLY, EARLY, GRAINS, HOUSEHOLD, LINK, estimate
 from scripts.prepare_succession_budget_inputs import digest, prepare
 from scripts.run_succession_annual_allocation import csv_write, json_write
 from scripts.run_succession_empirical_budget import settings
@@ -53,12 +53,24 @@ def run(root,out):
     assert set(definitions.index)==set(land) and definitions.index.is_unique
     assert all(term in definitions.loc[key] for key,term in zip(land,("年初","年末","承包田","转包入","转包出"),strict=True))
     keys = ["year","hhid","id","smgen"]
-    raw = pd.read_csv(folder/EARLY,usecols=keys+land,dtype={"hhid":"string","id":"string"})
+    crop_labor = [f"{k}_{code}" for _,_,code in GRAINS for k in ("sow","labor_d")]
+    raw = pd.read_csv(folder/EARLY,usecols=keys+land+crop_labor,dtype={"hhid":"string","id":"string"})
     cohort = pd.DataFrame(json.loads((root/LINK).read_bytes()))
     known = raw.iloc[cohort.source_row.to_numpy()-2].hhid
     data = raw.loc[raw.year.between(2010,2015)&raw.hhid.notna()&raw.hhid.eq(raw.id)].copy()
     data = data.loc[~data.duplicated(["hhid","year"],keep=False)]
     data["scope"] = data.hhid.isin(known).map({True:"frozen_cohort",False:"noncohort"})
+    donors = data.loc[data.year.eq(2010)&data.scope.eq("noncohort")&data.smgen.notna()]
+    marginal = []
+    for name,_,code in GRAINS:
+        area,days = f"sow_{code}",f"labor_d_{code}"
+        reports = donors.loc[donors[area].gt(0)&donors[days].gt(0)]
+        old = next(x for x in evidence if x["crop"]==name)
+        marginal.append(dict(crop=name,year=2010,marginal_positive_reports=len(reports),
+                             marginal_ratio_days_mu=reports[days].sum()/reports[area].sum(),
+                             marginal_median_days_mu=(reports[days]/reports[area]).median(),
+                             complete_budget_reports=old["complete_rows"],
+                             complete_budget_ratio_days_mu=old["total_days_mu"]))
     counts = []
     for (scope,year),a in data.groupby(["scope","year"]):
         ok = a[["area_in1","area_de2"]].ge(0).all(axis=1)
@@ -87,6 +99,7 @@ def run(root,out):
     csv_write(out/"nfps_reported_land_scope.csv",counts)
     csv_write(out/"land_dictionary_trace.csv",[dict(field=k,label=v) for k,v in definitions.items()])
     csv_write(out/"member_labor_coverage.csv",availability)
+    csv_write(out/"grain_labor_marginal_coverage.csv",marginal)
     json_write(out/"receipt.json",dict(source_sha256=source,hired_wage_2024=reference,
              boundary="Same opening rights/CPI; one season, no market, no fiscal treatment, no RP forecast; "
              "hire limit = household opening labor; no inferred mechanization or external pool. "
