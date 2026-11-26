@@ -1,0 +1,32 @@
+{
+  "version": "prespecified-before-candidate-replay-20261126",
+  "frozen_parents": {"F1": "cc7eaabd2f4aa49686878afd5487ecd54b2c05ed", "7a": "7a304a8ab33af8b2ca9ee3225428c900c8f5d02d"},
+  "survey": "NFPS 2009-2015 household/member, original questionnaires and dictionaries; baseline 2010",
+  "authorized_household_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+  "cohort_sha256": "28b094c623a9ee0138f08b084422e37f04e850b187051cb88706439e18f45936",
+  "cohort_population": 600,
+  "historical": {"years": [2011,2012,2013,2014,2015], "seeds": [301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320], "meaning": "previously examined, never independent"},
+  "linkage": "uniquely matched hhid in 2010 and target wave, original id also agrees; exact frozen V3 cohort and two confirmed area-field corrections",
+  "weights": "unweighted matched sample, V3 initialization draw is not a validation survey weight",
+  "thresholds": {"participation_absolute_pp": 0.10, "mixed_absolute_pp": 0.10, "grain_share_quantile_mae": 0.15, "grain_mu_times_relative_error": 0.10, "closing_physical_mu_relative_error": 0.10},
+  "definitions": {
+    "sown_denominator": "all linked households with both nonnegative observed food and cash crop area; grain-food combination excludes other crop, keep its observed class",
+    "simulation_sown_tolerance_mu_times": 1e-7,
+    "grain_shares": "P25/P50/P75, linear percentiles on strictly positive grain+cash sowing within the comparable household set",
+    "stock_denominator": "linked households with nonnegative opening and strictly positive closing observed physical operating stock, regardless of sowing",
+    "invalid": "no negative, unknown or inconsistent stock imputed or assimilated to zero; where a metric denominator is missing/zero, cannot decide",
+    "grain_relative": "abs(sum(sim)-sum(observed))/sum(observed), same matched households",
+    "closing_relative": "abs(sum(sim)-sum(observed))/sum(observed), same stock reporters",
+    "min_pooled_annual_coverage": 300,
+    "min_descriptive_subgroup": 30,
+    "coverage_rationale": "300 is half the fixed initialization roster and avoids a small selected subset passing a whole-cohort group; initial area, retained coverage and lack of population inference still reported. Subgroups below 30 are not rated."
+  },
+  "independent_gate": {
+    "rule": "verify provenance before inspecting outcomes; selection unit distinct from development, adequate compatible paired observations, includes observed initialization and subsequent years; all 20 seeds for every predeclared external group-year must pass all applicable gates and integrity",
+    "missing_evidence": "cannot decide; route C after completing historical replay",
+    "government": "no formal training, policy rankings or reward selection without genuine independent recursive coverage"
+  },
+  "revision_limit": 3,
+  "candidate_selection": "carry over F1 behavioral rules unless a source-grounded change explains the linked evidence without contaminating the holdout; evaluate the stock ledger even if leave behavioral rules unchanged",
+  "additional_flow_gate": "not set: sparse dual reporter overlap and incomplete stock-flow accounting prevent using reported flows as a blanket acceptance gate"
+}
