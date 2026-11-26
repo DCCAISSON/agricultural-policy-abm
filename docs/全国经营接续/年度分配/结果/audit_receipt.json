@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "region_years": 43008,
+  "paths": 2688,
+  "holdout_seeds": 128,
+  "training_tables_refit": 3,
+  "frozen_sha256": "1a37e296142c455df474a7cfa67dfb60dae32da03720fc534a0be2c53ed76c25",
+  "budget_max": 7200,
+  "checks": [
+    "paired grid",
+    "developer-only fixed selection and policy refit",
+    "lagged observation",
+    "support and fallback",
+    "local and common fiscal accounting",
+    "last two years P0",
+    "grain/land/support subaccounts",
+    "cash rollover and initial cash sensitivity identity"
+  ]
+}

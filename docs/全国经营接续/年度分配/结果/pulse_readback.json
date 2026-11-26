@@ -1,0 +1,40 @@
+{
+  "region_years": 14336,
+  "estimates": 1242,
+  "maxima": {
+    "mean": 0.0,
+    "low": 0.0,
+    "high": 0.0,
+    "confidence": 0.0
+  },
+  "absolute_tolerance": 1e-06,
+  "relative_tolerance": 1e-12,
+  "stage_2_eligible": false,
+  "decisions": [
+    {
+      "instrument": "grain_pre",
+      "first_year_interval": [
+        -2017.0545957970244,
+        629.3521736056168
+      ],
+      "cumulative_interval": [
+        -2799.920273966928,
+        1937.3413639248404
+      ],
+      "supported_reversal": false
+    },
+    {
+      "instrument": "takeover_pre",
+      "first_year_interval": [
+        -347.2342059333991,
+        422.38597887403677
+      ],
+      "cumulative_interval": [
+        -780.702880224827,
+        1113.7148380222402
+      ],
+      "supported_reversal": false
+    }
+  ],
+  "supplemental_rows": 72
+}

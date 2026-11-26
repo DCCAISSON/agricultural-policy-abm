@@ -1,0 +1,96 @@
+{
+  "primary_repeat": 1,
+  "primary_comparisons": {
+    "fixed_02": {
+      "tests": {
+        "grain_kg": {
+          "focal": "q_1",
+          "reference": "fixed_02",
+          "region": "joint",
+          "metric": "grain_kg",
+          "n": 128,
+          "mean": -1934.957895087813,
+          "lower": -4762.45553291743,
+          "upper": 892.5397427418038,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        },
+        "spending": {
+          "focal": "q_1",
+          "reference": "fixed_02",
+          "region": "joint",
+          "metric": "spending",
+          "n": 128,
+          "mean": -3566.015625,
+          "lower": -4554.650497318573,
+          "upper": -2577.3807526814267,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        },
+        "stop_grain_kg": {
+          "focal": "q_1",
+          "reference": "fixed_02",
+          "region": "joint",
+          "metric": "stop_grain_kg",
+          "n": 128,
+          "mean": -251.00685318782303,
+          "lower": -1112.767889267622,
+          "upper": 610.7541828919759,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        }
+      },
+      "payment_equivalence_established": false,
+      "lower_payment_established": true,
+      "improvement_established": false
+    },
+    "myopic_1": {
+      "tests": {
+        "grain_kg": {
+          "focal": "q_1",
+          "reference": "myopic_1",
+          "region": "joint",
+          "metric": "grain_kg",
+          "n": 128,
+          "mean": -2220.5617104240264,
+          "lower": -4377.341677831882,
+          "upper": -63.78174301617082,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        },
+        "spending": {
+          "focal": "q_1",
+          "reference": "myopic_1",
+          "region": "joint",
+          "metric": "spending",
+          "n": 128,
+          "mean": 116.6015625,
+          "lower": -618.7465526536695,
+          "upper": 851.9496776536695,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        },
+        "stop_grain_kg": {
+          "focal": "q_1",
+          "reference": "myopic_1",
+          "region": "joint",
+          "metric": "stop_grain_kg",
+          "n": 128,
+          "mean": -216.00133637903673,
+          "lower": -939.1130659556823,
+          "upper": 507.1103931976088,
+          "confidence": 0.9916666666666667,
+          "primary": true
+        }
+      },
+      "payment_equivalence_established": false,
+      "lower_payment_established": false,
+      "improvement_established": false
+    }
+  },
+  "coverage": 0.8395061728395061,
+  "coverage_pass": false,
+  "fiscal_gain": false,
+  "evaluation_unit": "complete paired two-region synthetic path",
+  "empirical_validation": "not run"
+}
