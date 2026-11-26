@@ -17,6 +17,7 @@ class CropOffer:
     forgone_rent: float = 0.
     restart_cash: float = 0.
     restart_days: float = 0.
+    area: float = AREA
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,56 @@ class Allocation:
     cash: float
     days: float
     value: float
+
+
+def variable_allocation(
+    offers: list[CropOffer], cash: float, labor: float, wage: float, job_days: float,
+) -> Allocation:
+    """Apply the 7a cash/labor/surplus objective to unequal-area lots."""
+    outside = min(labor, job_days)
+
+    def opportunity(days: float) -> float:
+        return wage * (outside - min(max(0., labor-days), job_days))
+
+    candidates = []
+    for p in offers:
+        for crop, (yield_, price, inputs, work) in CROPS.items():
+            grant, credit = (p.grant, p.credit) if crop == "grain" else (0., 0.)
+            cost = p.area * inputs + p.restart_cash
+            days = p.area * work + p.restart_days
+            net = p.area * yield_ * price * p.quality - cost + grant - p.forgone_rent
+            if cost-credit <= cash+EPS and days <= labor+EPS and net-opportunity(days)>EPS:
+                candidates.append((p.id, crop, cost-credit, days, net))
+    if len(offers) <= 4:
+        by_plot = {p.id: [(p.id, "idle", 0., 0., 0.)] for p in offers}
+        for row in candidates:
+            by_plot[row[0]].append(row)
+        best = Allocation({}, 0., 0., 0.)
+        for items in product(*by_plot.values()):
+            used_cash = sum(x[2] for x in items)
+            used_days = sum(x[3] for x in items)
+            if used_cash <= cash+EPS and used_days <= labor+EPS:
+                value = sum(x[4] for x in items) - opportunity(used_days)
+                if value > best.value+EPS:
+                    best = Allocation({x[0]: x[1] for x in items if x[1] != "idle"}, used_cash, used_days, value)
+        return best
+    best = Allocation({}, 0., 0., 0.)
+    for weight in (0., 0.5, 1.):
+        def priority(row: tuple) -> float:
+            money, days, net = row[2:]
+            scarcity = weight*money/max(cash,EPS) + (1.-weight)*days/max(labor,EPS)
+            return (net-opportunity(days))/max(scarcity,EPS)
+        employed, used_cash, used_days, value = {}, 0., 0., 0.
+        for pid, crop, money, days, net in sorted(candidates, key=priority, reverse=True):
+            incremental = net-(opportunity(used_days+days)-opportunity(used_days))
+            if pid not in employed and used_cash+money<=cash+EPS and used_days+days<=labor+EPS and incremental>EPS:
+                employed[pid] = crop
+                used_cash += money
+                used_days += days
+                value += incremental
+        if value > best.value+EPS:
+            best = Allocation(employed, used_cash, used_days, value)
+    return best
 
 
 def joint_allocation(

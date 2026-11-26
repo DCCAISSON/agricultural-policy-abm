@@ -1,12 +1,12 @@
 """Synthetic land succession and fiscal transmission, one annual economy."""
 from collections import defaultdict
 from copy import copy
-from dataclasses import dataclass
-from math import floor, isclose
+from dataclasses import dataclass, replace
+from math import floor, fsum, isclose
 
 import numpy as np
 
-from core.succession_allocation import AREA, CROPS, EPS, CropOffer, joint_allocation
+from core.succession_allocation import AREA, CROPS, EPS, CropOffer, joint_allocation, variable_allocation
 
 RATE = 85.
 BUDGET = 7200.
@@ -51,6 +51,9 @@ class Operator:
     labor: float
     wage: float
     job_days: float
+    market: int = 0
+    consumption: float | None = None
+    offseason_income: float = 0.
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +62,8 @@ class Plot:
     owner: str
     quality: float
     initial_crop: str
+    area: float = AREA
+    tradable: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +85,7 @@ def choose_crop(plot, cash, labor, wage, job_days, expected_support=0., pre_cred
 class Succession:
     def __init__(self, seed: int, scenario: Scenario):
         self.seed, self.scenario = seed, scenario
+        self.variable_area = False
         rng = np.random.default_rng([seed, 0, 91])
         self.operators: dict[str, Operator] = {}
         self.plots: list[Plot] = []
@@ -107,6 +113,23 @@ class Succession:
                                  p.quality for p in self.plots if p.initial_crop=="grain"),
                              offered_area=0., unfilled_area=0., successor_grain=0.,
                              continuity_area=0., spending=0.)
+
+    @classmethod
+    def from_assets(cls, seed: int, scenario: Scenario, actors: tuple[Operator, ...],
+                    plots: tuple[Plot, ...], initial_grain: float) -> "Succession":
+        """Use verified opening assets without generating synthetic households."""
+        world = cls(seed, replace(scenario, owners=0, entrants=0))
+        world.scenario = scenario
+        world.variable_area = True
+        world.operators = {a.id:a for a in actors}
+        world.plots = list(plots)
+        world.cash = {a.id:a.cash for a in actors}
+        world.operator = {p.id:p.owner for p in plots}
+        world.crop = {p.id:p.initial_crop for p in plots}
+        world.land = fsum(p.area for p in plots)
+        world.observed = dict(world.observed, grain_kg=initial_grain,
+                              grain_area=fsum(p.area for p in plots if p.initial_crop=="grain"))
+        return world
 
     def fork(self):
         """Copy mutable stocks for a conditionally fixed-contract comparison."""
@@ -216,6 +239,9 @@ class Succession:
         ask = AREA*s.ask_per_mu
         # A fixed guarantee announced before orders; unused reservations never raise the rate.
         amount = min(s.rate*AREA,s.budget/max(1,len(plots)),AREA*CROPS["grain"][2]) if policy!="none" else 0.
+        if self.variable_area:
+            amount = AREA*min(s.rate,s.budget/self.land,CROPS["grain"][2]) if policy!="none" else 0.
+        allocate = variable_allocation if self.variable_area else joint_allocation
 
         held = {}
         defaulted = set()
@@ -249,27 +275,32 @@ class Succession:
                     available[p.owner].append(p)
             protected = defaultdict(list)
             for pid,c in held.items():
-                protected[c.buyer].append(CropOffer(pid,by_id[pid].quality,
-                    amount if policy.startswith("grain_") else 0.,
-                    amount if pre and policy.startswith("grain_") else 0.))
+                p = by_id[pid]
+                grant = amount * (p.area/AREA) if policy.startswith("grain_") else 0.
+                protected[c.buyer].append(CropOffer(pid,p.quality,grant,grant if pre else 0.,area=p.area))
             for k in keys:
                 a = self.operators[k]
-                grant = amount if policy.startswith("grain_") else 0.
-                own = [CropOffer(p.id,p.quality,grant,grant if pre else 0.,
-                                 ask*(1.-s.search_failure)) for p in available[k]]
-                plan = joint_allocation(own+protected[k],plan_cash[k],a.labor,wage[k],a.job_days)
+                grant_mu = amount/AREA if policy.startswith("grain_") else 0.
+                own = [CropOffer(p.id,p.quality,grant_mu*p.area,grant_mu*p.area if pre else 0.,
+                                 s.ask_per_mu*p.area*(1.-s.search_failure) if p.tradable else 0.,
+                                 area=p.area) for p in available[k]]
+                plan = allocate(own+protected[k],plan_cash[k],a.labor,wage[k],a.job_days)
                 plan_spend[k],plan_days[k] = plan.cash,plan.days
                 planned_crop.update(plan.crops)
                 for p in available[k]:
                     if p.id in plan.crops:
                         retained.add(p.id)
                         self.operator[p.id] = k
-                    else:
+                    elif p.tradable:
                         released.add(p.id)
             posted = {p for p in released if search[p]>=s.search_failure}
             free_cash = {k:max(0.,plan_cash[k]-plan_spend[k]) for k in keys}
-            new, demand = self._market([p for p in plots if p.id in posted],free_cash,plan_days,wage,
-                                       old,held_buyers,policy,amount)
+            listed = [p for p in plots if p.id in posted]
+            if self.variable_area:
+                from core.succession_area_market import clear_area_market
+                new, demand = clear_area_market(self,listed,free_cash,plan_days,wage,old,held_buyers,policy,amount/AREA)
+            else:
+                new, demand = self._market(listed,free_cash,plan_days,wage,old,held_buyers,policy,amount)
             if s.recovery:
                 for pid in released-new.keys():
                     self.operator[pid] = by_id[pid].owner
@@ -317,45 +348,45 @@ class Succession:
                 policy.startswith("takeover_") and p.id in new and old.get(p.id)!=k)
             qualification[p.id] = qualified
             recovery = p.id in released and p.id not in self.contracts
-            g = amount if qualified else 0.
+            g = amount*(p.area/AREA) if qualified else 0.
             allocated[k].append(CropOffer(p.id,p.quality,g,g if pre else 0.,
                                            restart_cash=RECOVERY_COST if recovery else 0.,
-                                           restart_days=RECOVERY_DAYS if recovery else 0.))
+                                           restart_days=RECOVERY_DAYS if recovery else 0.,area=p.area))
         result, awards, failure = {}, {}, {}
         for k in keys:
             op = self.operators[k]
-            plan = joint_allocation(allocated[k],liquid[k],labor[k],wage[k],op.job_days)
+            plan = allocate(allocated[k],liquid[k],labor[k],wage[k],op.job_days)
             a = account[k]
             for p in allocated[k]:
                 crop = plan.crops.get(p.id)
                 if crop is None:
-                    min_cash = AREA*CROPS["grain"][2]+p.restart_cash-p.credit
-                    min_labor = AREA*CROPS["grain"][3]+p.restart_days
+                    min_cash = p.area*CROPS["grain"][2]+p.restart_cash-p.credit
+                    min_labor = p.area*CROPS["grain"][3]+p.restart_days
                     cash_short = min_cash>liquid[k]-plan.cash+EPS
                     labor_short = min_labor>labor[k]-plan.days+EPS
                     failure[p.id] = ("cash_and_labor" if cash_short and labor_short else
                                      "cash" if cash_short else "labor" if labor_short else "no_viable_plan")
                     continue
                 y,price,inputs,days = CROPS[crop]
-                qty = AREA*y*p.quality*shock
+                qty = p.area*y*p.quality*shock
                 payment = p.grant if crop=="grain" else 0.
                 awards[p.id] = payment
                 a["pre_support" if pre else "post_support"] += payment
-                a["inputs"] += AREA*inputs
+                a["inputs"] += p.area*inputs
                 a["sales"] += qty*price
-                a["farm_days"] += AREA*days
+                a["farm_days"] += p.area*days
                 a["recovery_cost"] += p.restart_cash
                 a["recovery_days"] += p.restart_days
                 result[p.id] = (crop,qty)
             assert a["inputs"]+a["recovery_cost"]-a["pre_support"]<=liquid[k]+1e-7
             a["job_days"] = min(op.job_days,max(0.,labor[k]-plan.days))
-            a["job_income"] = a["job_days"]*wage[k]
+            a["job_income"] = a["job_days"]*wage[k]+op.offseason_income
             a["foregone_job_income"] = (min(op.job_days,labor[k])-a["job_days"])*wage[k]
 
         actors = []
         planted_count = defaultdict(int)
         for p in result:
-            planted_count[self.operator[p]] += 1
+            planted_count[self.operator[p]] += by_id[p].area
         leases = defaultdict(int)
         for c in self.contracts.values():
             leases[c.buyer] += 1
@@ -366,7 +397,8 @@ class Succession:
             income = profit+a["support"]+a["rent_income"]+a["job_income"]
             balance = opening[k]+a["restart_capital"]+income
             assert balance>=-1e-7
-            a["consumption"] = min(max(0.,balance),800. if op.tenant else 1900.)
+            desired_consumption = op.consumption if op.consumption is not None else (800. if op.tenant else 1900.)
+            a["consumption"] = min(max(0.,balance),desired_consumption)
             self.cash[k] = max(0.,balance-a["consumption"])
             exit_now = op.tenant and leases[k]>0 and self.cash[k]<s.start_cost+ask+s.fee
             if exit_now:
@@ -377,9 +409,9 @@ class Succession:
                 profit=profit,income=income,closing=self.cash[k],labor_capacity=labor[k],liquidity=liquid[k],
                 post_rent_cash=paid_contract_cash[k],off_farm_wage=wage[k],weather=shock,
                 planned_cash=plan_spend[k],planned_days=plan_days[k],leases=leases[k],
-                quoted_plots=slots,highest_bid_per_mu=bid/AREA,
+                quoted_plots=slots,highest_bid_per_mu=bid if self.variable_area else bid/AREA,
                 expanded=leases[k]>self.last_leases.get(k,0),shrunk=leases[k]<self.last_leases.get(k,0),
-                operation_area=AREA*planted_count[k],exit=exit_now,**a))
+                operation_area=planted_count[k],exit=exit_now,**a))
         self.last_leases = dict(leases)
         fields = []
         trading = []
@@ -397,18 +429,21 @@ class Succession:
             changed = who is not None and prev not in (None,who)
             unchanged = who is not None and who==prev
             recovery = who==p.owner and pid in released and c is None
-            reason = failure.get(pid,"" if crop!="idle" else ("search" if pid not in posted else "no_match"))
+            reason = failure.get(pid,"" if crop!="idle" else (
+                "restricted_right" if not p.tradable else ("search" if pid not in posted else "no_match")))
             rent = c.rent if c else 0.
             fee = s.fee if pid in new else 0.
+            floor_rent = s.ask_per_mu*p.area
+            potential_payment = amount*(p.area/AREA) if qualified else 0.
             fields.append(dict(plot=pid,owner=p.owner,operator=who,assigned_operator=assigned,previous_operator=prev,
                 previous_crop=previous_crop[pid],crop=crop,planned_crop=planned_crop.get(pid),
-                quality=p.quality,physical_area=AREA,planted_area=AREA if crop!="idle" else 0.,
+                quality=p.quality,physical_area=p.area,planted_area=p.area if crop!="idle" else 0.,
                 harvest=qty,lease=bool(c),released=pid in released,posted=pid in posted,matched=pid in new,
-                rent=rent,rent_per_mu=rent/AREA,bid=c.bid if c else 0.,ask=c.ask if c else ask,
+                rent=rent,rent_per_mu=rent/p.area,bid=c.bid if c else 0.,ask=c.ask if c else floor_rent,
                 contract_start=c.start if c else None,contract_end=c.end if c else None,fee=fee,
                 defaulted=pid in defaulted,recovered=recovery,retained_plan=pid in retained,
-                eligible=qualified,expected_support=amount if qualified else 0.,
-                commitment=amount if qualified else 0.,support=awards.get(pid,0.),
+                eligible=qualified,expected_support=potential_payment,
+                commitment=potential_payment,support=awards.get(pid,0.),
                 failure=reason,changed=changed,same_operator=unchanged,
                 new_lease=pid in new and who!=prev,renewed=pid in new and who==prev,
                 continued_lease=pid in held,leased_idle=bool(c) and crop=="idle",
@@ -417,9 +452,9 @@ class Succession:
                 successor_grain=changed and crop=="grain",reactivated=prev is None and crop!="idle",
                 continuation=changed and previous_crop[pid]==crop=="grain",next_operator=who,next_crop=crop))
             if ledger and (pid in released or c or pid in defaulted):
-                trading.append(dict(plot=pid,owner=p.owner,area=AREA,ask=c.ask if c else ask,
+                trading.append(dict(plot=pid,owner=p.owner,area=p.area,ask=c.ask if c else floor_rent,
                     search_open=pid in posted,posted=pid in posted,buyer=c.buyer if c else None,
-                    bid=c.bid if c else None,rent=rent,rent_per_mu=rent/AREA,fee=fee,
+                    bid=c.bid if c else None,rent=rent,rent_per_mu=rent/p.area,fee=fee,
                     start=c.start if c else None,end=c.end if c else None,
                     matched=pid in new,continued=pid in held,defaulted=pid in defaulted,
                     result="matched" if pid in new else "continued" if c else "no_match" if pid in posted else "search"))
@@ -441,21 +476,23 @@ def _annual(fields, actors, scenario, land):
     total_planted = sum(a["operation_area"] for a in actors)
     owners = [a for a in actors if a["kind"]=="owner"]
     tenants = [a for a in actors if a["kind"]=="tenant"]
-    amount = lambda key: AREA*sum(f[key] for f in fields)
-    return dict(grain_area=AREA*len(grain),grain_kg=sum(f["harvest"] for f in grain),
+    amount = lambda key: sum(f["physical_area"] for f in fields if f[key])
+    grain_area = sum(f["physical_area"] for f in grain)
+    leased_area = sum(f["physical_area"] for f in leased)
+    return dict(grain_area=grain_area,grain_kg=sum(f["harvest"] for f in grain),
         offered_area=amount("released"),matched_area=amount("matched"),
-        posted_area=amount("posted"),leased_area=AREA*len(leased),
-        unfilled_area=AREA*sum(f["released"] and not f["matched"] for f in fields),
-        idle_area=land-total_planted,cash_crop_area=total_planted-AREA*len(grain),
+        posted_area=amount("posted"),leased_area=leased_area,
+        unfilled_area=sum(f["physical_area"] for f in fields if f["released"] and not f["matched"]),
+        idle_area=max(0.,land-total_planted),cash_crop_area=max(0.,total_planted-grain_area),
         successor_grain=amount("successor_grain"),continuity_area=amount("continuation"),
         retained_grain=amount("retained_grain"),reactivated_area=amount("reactivated"),
         renewed_area=amount("renewed"),held_area=amount("continued_lease"),default_area=amount("defaulted"),
         recovered_area=amount("recovered"),leased_idle=amount("leased_idle"),
         leased_cash=amount("leased_cash"),operator_change=amount("changed"),
-        leased_grain=AREA*sum(f["crop"]=="grain" for f in leased),
+        leased_grain=sum(f["physical_area"] for f in leased if f["crop"]=="grain"),
         spending=spending,budget=scenario.budget,unused_budget=scenario.budget-spending,
         announced_rate=scenario.rate,committed=sum(f["commitment"] for f in fields),
-        rent_total=rents,rent_mu=rents/(AREA*len(leased)) if leased else 0.,
+        rent_total=rents,rent_mu=rents/leased_area if leased else 0.,
         tenant_profit=sum(a["profit"] for a in tenants),owner_income=sum(a["income"] for a in owners),
         owner_rent_income=sum(a["rent_income"] for a in owners),
         owner_profit=sum(a["profit"] for a in owners),owner_nonfarm=sum(a["job_income"] for a in owners),
@@ -466,7 +503,7 @@ def _annual(fields, actors, scenario, land):
         owner_opening_cash=sum(a["opening"] for a in owners),tenant_opening_cash=sum(a["opening"] for a in tenants),
         owner_closing_cash=sum(a["closing"] for a in owners),tenant_closing_cash=sum(a["closing"] for a in tenants),
         concentration=sum((a["operation_area"]/total_planted)**2 for a in actors) if total_planted else 0.,
-        cash_unplanted=AREA*sum(f["failure"] in ("cash","cash_and_labor") for f in fields),
-        labor_unplanted=AREA*sum(f["failure"] in ("labor","cash_and_labor") for f in fields),
+        cash_unplanted=sum(f["physical_area"] for f in fields if f["failure"] in ("cash","cash_and_labor")),
+        labor_unplanted=sum(f["physical_area"] for f in fields if f["failure"] in ("labor","cash_and_labor")),
         expanded=sum(a["expanded"] for a in tenants),shrunk=sum(a["shrunk"] for a in tenants),
         exits=sum(a["exit"] for a in tenants))
