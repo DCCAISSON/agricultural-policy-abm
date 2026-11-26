@@ -123,6 +123,15 @@ def audit(training: Path, evaluation: Path, out: Path) -> None:
     out.mkdir(parents=True,exist_ok=False)
     csv_write(out/"action_counts.csv",[dict(mode=m,strategy=k,year=y,action=a,reason=r,count=n)
         for (m,k,y,a,r),n in sorted(frequencies.items())])
+    annual = []
+    for mode,strategy in modes:
+        for year in years:
+            for region in (*regions,"joint"):
+                group = regions if region=="joint" else (region,)
+                annual.append(dict(mode=mode,strategy=strategy,year=year,region=region,n=len(seeds),
+                    **{m:mean(fsum(ledger[s,mode,strategy,year,r][m] for r in group) for s in seeds)
+                       for m in OUTCOMES}))
+    csv_write(out/"annual_means.csv",annual)
     summarize(aggregates,seeds,regions,modes,strong,out)
     json_write(out/"receipt.json",dict(
         status="passed",region_years=len(ledger),paths=len(seeds)*len(modes),seed_count=len(seeds),

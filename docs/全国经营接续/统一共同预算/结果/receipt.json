@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "region_years": 39936,
+  "paths": 1248,
+  "seed_count": 48,
+  "coverage": {
+    "distinct_states": 102,
+    "opening_visits": 768,
+    "common_state_actions": 1722,
+    "supported_common_state_actions": 924,
+    "coverage": 0.5365853658536586
+  },
+  "coverage_pass": false,
+  "same_information_refit": true,
+  "common_budget": 98953,
+  "three_primary_outcomes_per_comparison": true,
+  "checks": [
+    "common initial state",
+    "fiscal mask and frozen choices",
+    "lagged grain only",
+    "regional cash, rent, land and planting accounting",
+    "withdrawal matched prefix and zero payments"
+  ]
+}

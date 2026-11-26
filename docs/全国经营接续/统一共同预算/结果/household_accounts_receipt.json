@@ -1,0 +1,9 @@
+{
+  "status": "passed detailed structural accounts",
+  "region_years": 112,
+  "actor_years": 16800,
+  "lot_years": 61880,
+  "empirical_status": "retrospective same-cohort description only; annual mu-seasons vs modeled physical mu not a pass criterion",
+  "panel_rules": "2011-15 same household and province, duplicate household/year excluded; crop missing distinct from zero",
+  "history": "four prespecified first fixed development seeds, P0, first five years; no parameters fitted"
+}
