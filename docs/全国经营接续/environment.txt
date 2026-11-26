@@ -1,0 +1,10 @@
+Python 3.11.2 (Windows x64)
+OPENBLAS_NUM_THREADS=1
+OMP_NUM_THREADS=1
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.15.2
+mesa==2.3.2
+openpyxl==3.1.2
+matplotlib==3.10.0
+pytest==9.0.2
