@@ -1,0 +1,43 @@
+{
+  "id": "7a-AB-annual-6plus2-v1",
+  "parent": "81279282e0a9d9d5d72855a07f4614422374c7c6",
+  "parent_tree": "515be6887ed3f41297e750a7564da007a07a20b3",
+  "base_blobs_lf": {
+    "core/land_succession.py": "1be991b71bc6f947a0685f9ad13ced31ef3c01a2",
+    "core/succession_allocation.py": "b8e2dbf66b59a4ded934181a7c5ef405966af3da"
+  },
+  "regions": [
+    {"id": "A", "condition": "middle", "search_failure": 0.25, "cash": 0.73, "labor": 0.77},
+    {"id": "B", "condition": "cash_labor_tight", "search_failure": 0.18, "cash": 0.66, "labor": 0.49}
+  ],
+  "budget_yuan": 7200,
+  "positive_region_caps_yuan": [3600, 7200],
+  "guarantees_yuan_per_mu": [18.75, 37.5],
+  "policies": ["none", "grain_pre", "takeover_pre"],
+  "nominal_rate_yuan_per_mu": 85,
+  "contract_years": 1,
+  "horizon": 8,
+  "active_years": 6,
+  "observation": "remaining active years, A and B lagged grain / regional full grain capacity bins, annual common ceiling",
+  "grain_bin_edges": [0.55, 0.70, 0.85],
+  "objective": "undiscounted eight-year total grain kg; myopic uses the identical grain measure for the current year only",
+  "fixed_development_seeds": [410001, 410096],
+  "training_repeats": [[420001, 420192], [421001, 421192], [422001, 422192]],
+  "evaluation_seeds": [430001, 430128],
+  "primary_repeat": 1,
+  "exploration": "uniform joint action at all six common openings; seed from pair seed and 7753; all 13 actions branched per opening",
+  "seed_mapping": "2*pair_seed plus zero-based region index",
+  "min_openings_per_state_action": 5,
+  "common_state_fraction_per_year": 0.01,
+  "common_state_action_coverage_required": 0.95,
+  "fallback": "both policies use joint P0 in unseen or unsupported states; Bellman continuation uses the P0 estimate at sparse observed states and the same-year pooled developer P0 baseline at unseen states; ties use first canonical action",
+  "cash_sensitivity": "evaluate frozen primary Q and frozen primary myopic with carry_cash=False; no refit",
+  "primary_interval_family": "two primary comparators x three endpoints (eight-year grain, two post-stop years grain, cumulative actual payment)",
+  "primary_alpha": 0.05,
+  "primary_family_size": 6,
+  "cost_equivalence_yuan": 720,
+  "grain_and_stop_noninferiority_margin_kg": 0,
+  "fiscal_gain": "simultaneous intervals establish higher total grain and no lower post-stop grain with equivalent or demonstrably lower payment, or establish lower payment with no lower total or post-stop grain; both comparators and coverage required for primary Q claim",
+  "old_pulse_check": {"absolute_tolerance": 0.000001, "relative_tolerance": 1e-12, "supplement_simultaneous_family": 24},
+  "scope": "new independent synthetic paths on the same A/B parameters; no national policy comparison or new empirical fit"
+}
