@@ -246,7 +246,7 @@ def estimate_crop_transitions(raw_file, excluded, continuous=False, end_year=201
     return pd.DataFrame(rows)
 
 
-def run_area_structures(destination, mix_mode=None, *, settings=None):
+def run_area_structures(destination, mix_mode=None, *, settings=None, observer=None):
     """One entry for paired, fixed-policy structural comparisons. Private rows stay local."""
     import json
     import hashlib
@@ -513,6 +513,8 @@ def run_area_structures(destination, mix_mode=None, *, settings=None):
                     model.area_economy.update(regional_history=annual[min(2012,yr-1)],macro_region=geo,crop_penalty=penalty)
                     if penalties is not None:model.area_economy['actor_crop_penalty']=penalties
                 model.step()
+                if observer is not None:
+                    observer(seed, yr, b, model, private)
                 rows,orders,deals,sar=model.area_last
                 ar=pd.DataFrame(rows); logs.append(ar);offers.extend(dict(year=yr,**o) for o in orders)
                 contracts.extend(deals);sars.append(sar)

@@ -1,0 +1,9 @@
+{
+  "protocol_sha256": "68e28006d5316dbed70a28c2085ba015f56f267a327417f0a4681f620f75dfc8",
+  "historical_cells": 100,
+  "historical_four": 45,
+  "historical_five": 39,
+  "independent_recursive": "not_decidable_without_certified_untouched_sample",
+  "formal_policy_training": "not_started",
+  "decision": "C"
+}

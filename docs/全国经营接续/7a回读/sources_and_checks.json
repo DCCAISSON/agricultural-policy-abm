@@ -1,0 +1,37 @@
+{
+  "snapshot": "7a304a8ab33af8b2ca9ee3225428c900c8f5d02d",
+  "source": "formal",
+  "audit_provenance": "worktree/results/experiments/land_succession_transmission_final_20261126/audit_provenance.json",
+  "sha256": {
+    "manifest.json": "24ecfb24dc0db17394f96b528a2053923323e1ec7a479c9e67f2858065bd9f41",
+    "annual.csv": "7f0444a586329ebd2bb08f02032f3c73ec8089ce4f70279e0cf340e9e3d08376",
+    "operators.csv.gz": "853e6c7891b1bdd8b567e966bea4d875d6cf4542e8d108ed2a289e01c573340e",
+    "fiscal.csv.gz": "8c4c5f4787eee4f646129ed852f0788f9e57d08cda46fbd5d4f36a441094a96a",
+    "transactions.csv.gz": "a43fc5d720861bcf05f1502edbd9b239dd6da3f2934a277a33248f07f23e42df",
+    "training_sar.csv.gz": "c87ae179fd0d2a3f68dccadb5cae4c32052eccac42f94bda00e246f94fbdae0e",
+    "training_checkpoints.csv": "21427bcf349bb2eebd858a10f17991c717b4ff983882fdbf651164ab29839461",
+    "q_table.json": "9077cea7db0bb4f625e7bdb2f1627acfca63e15731a622b4e8440f12297d0b38",
+    "ledger_verification.json": "444ea6d57b80940b530d237af52612bd43ee476a2ae5446abe0309b247ce6edb",
+    "cessation_cohorts.csv": "73d0155b9f6f076e6be6f5d0e69997950d6306ff8a6ad76eca2ca53dbc9e7f6f"
+  },
+  "ledger_audit": {
+    "years": 186800,
+    "plots": 8966400,
+    "operators": 5969600,
+    "transactions": 1128746,
+    "fiscal": 2821002,
+    "analysis_sha256": "30c3369e328106ec305bdc6ff86459ab9e9d63b43fe6a62adc6be5586fa6dbd6",
+    "checks": "passed",
+    "failure_counts": {},
+    "examples": []
+  },
+  "checks": {
+    "fixed_arm_years": 32000,
+    "fixed_operator_years_compared": 819200,
+    "fixed_fiscal_arm_years": 32000,
+    "duration_p3_post_stop_fiscal_rows": 0
+  },
+  "gamma": 0.92,
+  "training_unique_seeds": 40960,
+  "selected_fixed": "takeover_pre"
+}
