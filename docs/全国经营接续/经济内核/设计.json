@@ -1,0 +1,11 @@
+{
+  "parent": "476b492dad9e27c8fe4af3ae164fe96ffdae6f0a",
+  "cohort": "F1 frozen 600; original hashes checked by prepare()",
+  "arms": ["legacy-M1", "shared-core-legacy-parameters", "named-activity-candidate"],
+  "seeds": [571001, 571002, 571003, 571004],
+  "years": [2011, 2012, 2013, 2014, 2015],
+  "policy": "P0; no training or policy comparisons",
+  "crop_fit_year": 2010,
+  "home_labor_only": true,
+  "design_limits": "One physical season; proportional competitive ranking at the posted reservation rent, not an estimated rural auction. Primary case unchanged across historical years. Named activity comparisons are structural; the accessible later-year crop-budget source is not early validation."
+}

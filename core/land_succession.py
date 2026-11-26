@@ -3,10 +3,14 @@ from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, replace
 from math import floor, fsum, isclose
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from core.succession_allocation import AREA, CROPS, EPS, CropOffer, joint_allocation, refine_mixed_plan, variable_allocation
+
+if TYPE_CHECKING:
+    from core.succession_economic_core import EconomicCore
 
 RATE = 85.
 BUDGET = 7200.
@@ -42,6 +46,7 @@ class Scenario:
     start_cost: float = TENANT_COST
     feedback: bool = True
     crop_refinement: bool = False
+    economics: "EconomicCore | None" = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +109,7 @@ class Succession:
         self.cash = {a.id:a.cash for a in self.operators.values()}
         self.operator = {p.id:p.owner for p in self.plots}
         self.crop = {p.id:p.initial_crop for p in self.plots}
+        self.grain_by_plot = {p.id:p.area for p in self.plots if p.initial_crop == "grain"}
         self.closed: dict[str,int] = {}
         self.contracts: dict[str,Contract] = {}
         self.last_leases = {}
@@ -127,6 +133,7 @@ class Succession:
         world.cash = {a.id:a.cash for a in actors}
         world.operator = {p.id:p.owner for p in plots}
         world.crop = {p.id:p.initial_crop for p in plots}
+        world.grain_by_plot = {p.id:p.area for p in plots if p.initial_crop == "grain"}
         world.land = fsum(p.area for p in plots)
         world.observed = dict(world.observed, grain_kg=initial_grain,
                               grain_area=fsum(p.area for p in plots if p.initial_crop=="grain"))
@@ -135,7 +142,7 @@ class Succession:
     def fork(self):
         """Copy mutable stocks for a conditionally fixed-contract comparison."""
         other = copy(self)
-        for name in ("cash", "operator", "crop", "closed", "contracts", "last_leases"):
+        for name in ("cash", "operator", "crop", "grain_by_plot", "closed", "contracts", "last_leases"):
             setattr(other, name, getattr(self, name).copy())
         other.plots = self.plots.copy()
         other.operators = self.operators.copy()
@@ -206,8 +213,11 @@ class Succession:
         """Advance one year; fixed is the same-opening-state P0 contract ledger."""
         if policy not in POLICIES:
             raise ValueError(f"Unknown policy: {policy}")
+        from core.succession_economic_core import clear_packages, offer, solve
+
         self.year += 1
         s = self.scenario
+        economics = s.economics
         if not s.feedback or not s.carry_cash:
             self.cash = {a.id:a.cash for a in self.operators.values()}
         if not s.feedback or not s.carry_exit:
@@ -238,10 +248,11 @@ class Succession:
         wage = {k:self.operators[k].wage*s.outside_wage*job_move[k] for k in keys}
         pre = policy.endswith("_pre")
         ask = AREA*s.ask_per_mu
+        grant_cap = economics.grant_cap if economics else CROPS["grain"][2]
         # A fixed guarantee announced before orders; unused reservations never raise the rate.
-        amount = min(s.rate*AREA,s.budget/max(1,len(plots)),AREA*CROPS["grain"][2]) if policy!="none" else 0.
+        amount = min(s.rate*AREA,s.budget/max(1,len(plots)),AREA*grant_cap) if policy!="none" else 0.
         if self.variable_area:
-            amount = AREA*min(s.rate,s.budget/self.land,CROPS["grain"][2]) if policy!="none" else 0.
+            amount = AREA*min(s.rate,s.budget/self.land,grant_cap) if policy!="none" else 0.
         allocate = variable_allocation if self.variable_area else joint_allocation
 
         held = {}
@@ -279,7 +290,39 @@ class Succession:
                 p = by_id[pid]
                 grant = amount * (p.area/AREA) if policy.startswith("grain_") else 0.
                 protected[c.buyer].append(CropOffer(pid,p.quality,grant,grant if pre else 0.,area=p.area))
-            for k in keys:
+            kept = {}
+            if economics:
+                # The same opening resources inform release and bids. Later
+                # realization can still leave a signed lease partly unplanted.
+                for k in keys:
+                    a = self.operators[k]
+                    own = [offer(p,policy,amount/AREA) for p in available[k]]
+                    base = own+protected[k]
+                    plan = solve(economics,base,plan_cash[k],a.labor,wage[k],a.job_days,a.market)
+                    plan_spend[k],plan_days[k] = plan.cash,plan.days-plan.hired
+                    by_offer = {p.id:p for p in own}
+                    for p in available[k]:
+                        candidate = plan.area.get(p.id, ())
+                        if candidate:
+                            planned_crop[p.id] = "+".join(a.name for a,_ in candidate)
+                        # Compare with the value lost from withdrawing this
+                        # lot; the reservation rent is not booked as income.
+                        if p.tradable and search[p.id]>=s.search_failure:
+                            without = [row for row in base if row.id != p.id]
+                            alternative = (solve(economics,without,plan_cash[k],a.labor,wage[k],a.job_days,a.market)
+                                           if candidate and s.ask_per_mu > 0 else plan)
+                            if not candidate or plan.value-alternative.value+EPS < s.ask_per_mu*p.area:
+                                released.add(p.id)
+                                base = without
+                                plan = alternative
+                                continue
+                        if p.tradable and not candidate:
+                            released.add(p.id)
+                        else:
+                            retained.add(p.id)
+                    kept[k] = protected[k]+[by_offer[p.id] for p in available[k] if p.id not in released]
+                    self.operator.update({p.id:k for p in available[k]})
+            for k in (() if economics else keys):
                 a = self.operators[k]
                 grant_mu = amount/AREA if policy.startswith("grain_") else 0.
                 own = [CropOffer(p.id,p.quality,grant_mu*p.area,grant_mu*p.area if pre else 0.,
@@ -297,7 +340,11 @@ class Succession:
             posted = {p for p in released if search[p]>=s.search_failure}
             free_cash = {k:max(0.,plan_cash[k]-plan_spend[k]) for k in keys}
             listed = [p for p in plots if p.id in posted]
-            if self.variable_area:
+            if economics:
+                new, demand = clear_packages(self,listed,kept,plan_cash,
+                                             {k:self.operators[k].labor for k in keys},
+                                             wage,old,held,policy,amount/AREA)
+            elif self.variable_area:
                 from core.succession_area_market import clear_area_market
                 new, demand = clear_area_market(self,listed,free_cash,plan_days,wage,old,held_buyers,policy,amount/AREA)
             else:
@@ -348,14 +395,54 @@ class Succession:
             qualified = policy.startswith("grain_") or (
                 policy.startswith("takeover_") and p.id in new and old.get(p.id)!=k)
             qualification[p.id] = qualified
-            recovery = p.id in released and p.id not in self.contracts
+            recovery = not economics and p.id in released and p.id not in self.contracts
             g = amount*(p.area/AREA) if qualified else 0.
             allocated[k].append(CropOffer(p.id,p.quality,g,g if pre else 0.,
                                            restart_cash=RECOVERY_COST if recovery else 0.,
                                            restart_days=RECOVERY_DAYS if recovery else 0.,area=p.area))
-        result, awards, failure = {}, {}, {}
+        result, awards, failure, production = {}, {}, {}, {}
         for k in keys:
             op = self.operators[k]
+            if economics:
+                plan = solve(economics,allocated[k],liquid[k],labor[k],wage[k],op.job_days,op.market)
+                a = account[k]
+                a.update(hired_days=plan.hired,hired_cost=plan.hired*economics.hired_wage,
+                         retained_value=0.,gross_output_value=0.)
+                for p in allocated[k]:
+                    rows = plan.area.get(p.id,())
+                    if not rows:
+                        if not any(c.inputs-(p.credit/p.area if c.grain else 0.)<=EPS for c in economics.activities) and liquid[k]<=EPS:
+                            failure[p.id] = "cash"
+                        elif labor[k]+economics.hired_limit<=EPS:
+                            failure[p.id] = "labor"
+                        else:
+                            failure[p.id] = "not_allocated"
+                        continue
+                    crops = {c.name:dict(area=size,kg=size*c.kg*p.quality*shock,grain=c.grain)
+                             for c,size in rows}
+                    grain = fsum(size for c,size in rows if c.grain)
+                    cash_crop = fsum(size for c,size in rows if not c.grain)
+                    payment = p.grant*grain/p.area
+                    awards[p.id] = payment
+                    a["pre_support" if pre else "post_support"] += payment
+                    for c,size in rows:
+                        gross = crops[c.name]["kg"]*c.unit_value
+                        a["inputs"] += size*c.inputs
+                        a["sales"] += gross*c.sold
+                        a["retained_value"] += gross*(1.-c.sold)
+                        a["gross_output_value"] += gross
+                    grain_kg = fsum(x["kg"] for x in crops.values() if x["grain"])
+                    production[p.id] = dict(grain_area=grain,cash_crop_area=cash_crop,grain_kg=grain_kg,
+                                            crop_accounts=crops)
+                    result[p.id] = ("mixed" if grain and cash_crop else "grain" if grain else "cash",
+                                    fsum(x["kg"] for x in crops.values()) if not (grain and cash_crop) else None)
+                a["farm_days"] = plan.days-plan.hired
+                a["job_days"] = plan.job
+                a["job_income"] = plan.job*wage[k]+op.offseason_income
+                a["foregone_job_income"] = (min(op.job_days,labor[k])-plan.job)*wage[k]
+                assert a["inputs"]+a["hired_cost"]-a["pre_support"]<=liquid[k]+1e-7
+                assert isclose(a["sales"]+a["retained_value"],a["gross_output_value"],abs_tol=1e-7)
+                continue
             plan = allocate(allocated[k],liquid[k],labor[k],wage[k],op.job_days)
             if self.variable_area and s.crop_refinement:
                 plan = refine_mixed_plan(allocated[k],plan,liquid[k],labor[k],wage[k],op.job_days)
@@ -389,14 +476,17 @@ class Succession:
         actors = []
         planted_count = defaultdict(int)
         for p in result:
-            planted_count[self.operator[p]] += by_id[p].area
+            if economics:
+                planted_count[self.operator[p]] += production[p]["grain_area"]+production[p]["cash_crop_area"]
+            else:
+                planted_count[self.operator[p]] += by_id[p].area
         leases = defaultdict(int)
         for c in self.contracts.values():
             leases[c.buyer] += 1
         for k,a in account.items():
             op = self.operators[k]
             a["support"] = a["pre_support"]+a["post_support"]
-            profit = a["sales"]-a["inputs"]-a["rent_paid"]-a["fees"]-a["setup"]-a["recovery_cost"]
+            profit = a["sales"]-a["inputs"]-a["rent_paid"]-a["fees"]-a["setup"]-a["recovery_cost"]-a.get("hired_cost",0.)
             income = profit+a["support"]+a["rent_income"]+a["job_income"]
             balance = opening[k]+a["restart_capital"]+income
             assert balance>=-1e-7
@@ -454,6 +544,15 @@ class Succession:
                 switched_to_cash=unchanged and previous_crop[pid]=="grain" and crop=="cash",
                 successor_grain=changed and crop=="grain",reactivated=prev is None and crop!="idle",
                 continuation=changed and previous_crop[pid]==crop=="grain",next_operator=who,next_crop=crop))
+            if economics:
+                f = fields[-1]
+                f.update(production.get(pid,dict(grain_area=0.,cash_crop_area=0.,grain_kg=0.,crop_accounts={})))
+                f["planted_area"] = f["grain_area"]+f["cash_crop_area"]
+                prior_grain = self.grain_by_plot.get(pid,0.)
+                lower = max(0.,prior_grain+f["grain_area"]-p.area)
+                upper = min(prior_grain,f["grain_area"])
+                f.update(continuity_lo=lower if changed else 0.,continuity_hi=upper if changed else 0.,
+                         retained_lo=lower if unchanged else 0.,retained_hi=upper if unchanged else 0.)
             if ledger and (pid in released or c or pid in defaulted):
                 trading.append(dict(plot=pid,owner=p.owner,area=p.area,ask=c.ask if c else floor_rent,
                     search_open=pid in posted,posted=pid in posted,buyer=c.buyer if c else None,
@@ -462,6 +561,8 @@ class Succession:
                     matched=pid in new,continued=pid in held,defaulted=pid in defaulted,
                     result="matched" if pid in new else "continued" if c else "no_match" if pid in posted else "search"))
         self.crop = {p["plot"]:p["crop"] for p in fields}
+        self.grain_by_plot = {p["plot"]:p.get("grain_area",p["physical_area"] if p["crop"]=="grain" else 0.)
+                              for p in fields}
         economic = _annual(fields, actors, s, self.land)
         self.observed = economic
         return (economic,fields,actors,trading) if ledger else economic
@@ -470,7 +571,7 @@ class Succession:
 def _annual(fields, actors, scenario, land):
     grain = [f for f in fields if f["crop"]=="grain"]
     leased = [f for f in fields if f["lease"]]
-    spending = sum(f["support"] for f in grain)
+    spending = sum(f["support"] for f in fields)
     rents = sum(f["rent"] for f in leased)
     assert spending<=scenario.budget+1e-7
     assert isclose(spending,sum(a["support"] for a in actors),abs_tol=1e-7)
@@ -480,9 +581,11 @@ def _annual(fields, actors, scenario, land):
     owners = [a for a in actors if a["kind"]=="owner"]
     tenants = [a for a in actors if a["kind"]=="tenant"]
     amount = lambda key: sum(f["physical_area"] for f in fields if f[key])
-    grain_area = sum(f["physical_area"] for f in grain)
+    grain_area = (fsum(f["grain_area"] for f in fields) if scenario.economics else
+                  sum(f["physical_area"] for f in grain))
     leased_area = sum(f["physical_area"] for f in leased)
-    return dict(grain_area=grain_area,grain_kg=sum(f["harvest"] for f in grain),
+    result = dict(grain_area=grain_area,grain_kg=(fsum(f["grain_kg"] for f in fields) if scenario.economics
+                  else sum(f["harvest"] for f in grain)),
         offered_area=amount("released"),matched_area=amount("matched"),
         posted_area=amount("posted"),leased_area=leased_area,
         unfilled_area=sum(f["physical_area"] for f in fields if f["released"] and not f["matched"]),
@@ -510,3 +613,18 @@ def _annual(fields, actors, scenario, land):
         labor_unplanted=sum(f["physical_area"] for f in fields if f["failure"] in ("labor","cash_and_labor")),
         expanded=sum(a["expanded"] for a in tenants),shrunk=sum(a["shrunk"] for a in tenants),
         exits=sum(a["exit"] for a in tenants))
+    if scenario.economics:
+        assert isclose(fsum(f["planted_area"] for f in fields),total_planted,abs_tol=1e-7)
+        assert all(f["planted_area"]<=f["physical_area"]+EPS for f in fields)
+        result.update(leased_grain=fsum(f["grain_area"] for f in leased),
+                      leased_cash=fsum(f["cash_crop_area"] for f in leased),
+                      successor_grain=fsum(f["grain_area"] for f in fields if f["changed"]),
+                      continuity_area=fsum(f["continuity_lo"] for f in fields),
+                      continuation_upper=fsum(f["continuity_hi"] for f in fields),
+                      retained_grain=fsum(f["retained_lo"] for f in fields),
+                      retained_grain_upper=fsum(f["retained_hi"] for f in fields),
+                      retained_value=fsum(a["retained_value"] for a in actors),
+                      actual_sales=fsum(a["sales"] for a in actors),
+                      hired_days=fsum(a["hired_days"] for a in actors),
+                      hired_cost=fsum(a["hired_cost"] for a in actors))
+    return result

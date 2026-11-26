@@ -1,0 +1,30 @@
+issue,type,disposition,evidence,residual
+P0-01,measurement,partial,activity_evidence.csv,sparse complete budgets and later-year vegetables
+P0-02,measurement,partial,test_mixed_plan_feasible_and_uses_only_physical_land,one physical season is not annual crop rotations
+P0-03,implementation,fixed,test_fixed_cost_spreads_over_viable_package,annual fee amount remains a scenario
+P0-04,implementation,fixed,test_contract_term_matters_without_counting_future_policy,stationary opening stocks; no estimated market expectations
+P0-05,market,not_identified,nfps_reported_land_scope.csv,no external counterparty or organization
+P0-06,measurement,partial,opening_resource_sensitivity.csv,real hire capacity and machine substitution not identified
+P0-07,cash,partial,activity_evidence.csv,early cereal sale fractions absent; all-sale ceiling
+P0-08,implementation,fixed,test_unmatched_release_returns_to_self_production,same-window recovery; no measured delay
+P0-09,fiscal,retained,test_cash_timing_annual_budget_and_crop_payment,no new eligibility-rationing experiment
+P0-10,fiscal,not_started,design.json,old legal menu retained; no rankings
+P0-11,measurement,partial,crop_year.csv,no measured lot quality or household TFP; common shock
+P0-12,verification,compared,household_history.csv,history is not external validation
+P1-01,timing,verified,test_cash_timing_annual_budget_and_crop_payment,pre support is an input credit
+P1-02,measurement,partial,opening_resource_sensitivity.csv,annual repeated wage opportunity is not external evidence
+P1-03,rights,partial,test_market_never_offers_restricted_right_or_crosses_province,area_e1 is a rights proxy
+P1-04,market_boundary,not_identified,nfps_reported_land_scope.csv,reporter totals do not identify market depth
+P1-05,diagnostic,compared,opening_resource_sensitivity.csv,binding and failure labels not causal
+P1-06,implementation,fixed,clear_packages,posted reservation rent; bounded search not optimal auction
+P1-07,government,not_started,design.json,no new observation experiment
+P1-08,government,not_started,design.json,no fallback counterfactual
+P1-09,terminology,clarified,paper version note,finite-horizon fitted Q in old structural experiment
+P1-10,government,not_started,design.json,no learning in changed environment
+P1-11,provenance,verified,receipt.json,frozen cohort is not representative
+P1-12,validation,not_identified,household_history.csv,no independent panel or true parcel links
+P1-13,interpretation,clarified,paper version note,actual grain harvest rather than productivity change
+P1-14,accounting,partial,test_joint_cash_labor_and_hire_uses_actual_jobs_and_expense,cash labor and opportunity timing assumptions
+P1-15,measurement,restricted,dictionary_trace.csv,only named cereals; no unsupported tuber conversion
+P1-16,identity,partial,plot crop accounts and overlap bounds,synthetic contracts and identities
+P1-17,manuscript,clarified,paper version note,old Q tables are not evidence in the rebuilt environment

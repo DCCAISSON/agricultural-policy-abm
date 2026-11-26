@@ -45,7 +45,8 @@ class RegionalBudget:
         finally:
             world.scenario = original
         assert 0 <= row["spending"] <= row["committed"]+1e-7 <= cap+2e-7
-        guarantee = min(original.rate, cap/world.land, CROPS["grain"][2])
+        input_limit = original.economics.grant_cap if original.economics else CROPS["grain"][2]
+        guarantee = min(original.rate, cap/world.land, input_limit)
         return dict(row, policy=policy,reservation=cap,rate_mu=guarantee)
 
 
