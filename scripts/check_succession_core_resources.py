@@ -9,7 +9,7 @@ import pandas as pd
 
 from core.succession_economic_core import offer, solve
 from scripts.estimate_succession_activity_budgets import DICT_EARLY, EARLY, HOUSEHOLD, LINK, estimate
-from scripts.prepare_succession_budget_inputs import prepare
+from scripts.prepare_succession_budget_inputs import digest, prepare
 from scripts.run_succession_annual_allocation import csv_write, json_write
 from scripts.run_succession_empirical_budget import settings
 
@@ -68,10 +68,25 @@ def run(root,out):
                            positive_in=int(b.area_in1.gt(0).sum()),positive_out=int(b.area_de2.gt(0).sum()),
                            reported_in_mu=b.area_in1.sum(),reported_out_mu=b.area_de2.sum(),
                            stock_pair_known=len(c),opening_area_mu=c.area_b.sum(),closing_area_mu=c.area_e.sum()))
+    member_files = ("2009-2015individual.csv","individual variables2009-2015.xlsx")
+    labels = pd.read_excel(folder/member_files[1],header=None,usecols=[0,1]).set_index(0)[1]
+    member_fields = dict(homefarmdays="农业劳动时间",homenonfarmdays="非农业劳动时间",
+                         timeout="外出从业时间",outincome="外出从业收入")
+    assert all(label in labels.loc[key] for key,label in member_fields.items())
+    members = pd.read_csv(folder/member_files[0],usecols=["year",*member_fields])
+    availability = []
+    for year,m in members.groupby("year"):
+        for k in member_fields:
+            valid = m[k].ge(0) & (True if k=="outincome" else m[k].le(365))
+            availability.append(dict(year=year,field=k,label=labels.loc[k],members=len(m),
+                                     valid=int(valid.sum()),true_zero=int(m[k].eq(0).sum()),
+                                     not_inferred="annual field does not identify peak-season availability"))
+    source.update({str(HOUSEHOLD/f):digest(folder/f) for f in member_files})
     out.mkdir(parents=True,exist_ok=False)
     csv_write(out/"opening_resource_sensitivity.csv",rows)
     csv_write(out/"nfps_reported_land_scope.csv",counts)
     csv_write(out/"land_dictionary_trace.csv",[dict(field=k,label=v) for k,v in definitions.items()])
+    csv_write(out/"member_labor_coverage.csv",availability)
     json_write(out/"receipt.json",dict(source_sha256=source,hired_wage_2024=reference,
              boundary="Same opening rights/CPI; one season, no market, no fiscal treatment, no RP forecast; "
              "hire limit = household opening labor; no inferred mechanization or external pool. "
