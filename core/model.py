@@ -3710,26 +3710,53 @@ class MainModel(Model):
             prior=np.array([g/(g+c) if g+c>1e-7 else np.nan for g,c in (a.prior_crops for a in families)])
             if 'entry_shares' in fitted:
                 had_operating_land=np.array([a.area_previous_operated>1e-7 or a.lease_right>1e-7 for a in families])
-            def batch(positions, trading, fees=None):
+            intensity=[a.sowing_intensity for a in families]
+            if 'development_intensity' in fitted:
+                profile=fitted['development_intensity']
+                opening_area=np.array([a.base_area-carry[k][0]+carry[k][1] for a,k in zip(families,ids)])
+                bands=np.digitize(opening_area,[5.,15.,30.])
+                intensity=[profile[e['macro_region'][a.zone],band] for a,band in zip(families,bands)]
+            opening_data=e.get('development_opening')
+            def batch(positions, trading, fees=None, observed_opening=False):
                 stock=np.array([positions[k] for k in ids])
                 reserves=np.array([a.reserve for a in families])
                 funds=np.maximum(0.,np.array([a.balance for a in families])-reserves-stock[:,3]
                     -(np.array([fees[k] for k in ids]) if fees is not None else 0.))
                 data=dict(land=np.array([a.base_area for a in families])-stock[:,0]+stock[:,1],
                     rights=np.array([a.lease_right for a in families])-stock[:,0],funds=funds,
-                    rent=[e['rents'][a.zone]*(1.+e.get('rent_shift',0.)) for a in families],intensity=[a.sowing_intensity for a in families],
+                    rent=[e['rents'][a.zone]*(1.+e.get('rent_shift',0.)) for a in families],intensity=intensity,
                     labor=[a.family_days for a in families],workers=[a.v1_laborers for a in families],
                     transfer=[a.area_prior_transfer for a in families],prior=prior,
                     region=np.array([e['macro_region'][a.zone] for a in families]),
                     inputs=[factors(a) for a in families],limit=[a.area_limit for a in families])
                 if 'entry_shares' in fitted:
                     data['had_operating_land']=had_operating_land
+                if observed_opening:
+                    for field in ('prior','intensity','had_operating_land'):
+                        if field in data:
+                            data[field]=np.array(data[field],copy=True)
+                    for j,k in enumerate(ids):
+                        record=opening_data.get(k)
+                        if record is None:
+                            continue
+                        opening_land=record['area_b']
+                        data['land'][j]=opening_land
+                        data['rights'][j]=min(data['rights'][j],opening_land)
+                        sown=record['sow_food']+record['sow_cash']
+                        data['prior'][j]=record['sow_food']/sown if sown>1e-7 else np.nan
+                        if 'had_operating_land' in data:
+                            data['had_operating_land'][j]=opening_land>1e-7
+                        if 'development_intensity' in fitted:
+                            data['intensity'][j]=profile[e['macro_region'][families[j].zone],
+                                np.digitize(opening_land,[5.,15.,30.])]
                 if e.get('scalar_reference'):
                     one=[farm_batch({k:np.asarray(x)[i:i+1] for k,x in data.items()},fitted,u[i:i+1],
                              stage=v4,trade=trading,incentive=e.get('incentive',1.),diagnostic=diagnostic) for i in range(len(ids))]
                     return {k:np.concatenate([x[k] for x in one]) for k in one[0]}
                 return farm_batch(data,fitted,u,stage=v4,trade=trading,incentive=e.get('incentive',1.),diagnostic=diagnostic)
             first=batch(carry,True)
+            if opening_data is not None:
+                conditioned=batch(carry,False,observed_opening=True)
         for a in actors:
             k=a.unique_id
             out,ins,receivable,payable=carry[k]
@@ -3759,6 +3786,14 @@ class MainModel(Model):
                     rows[k].update({f'pre_{j}':first[j][i] for j in (
                         'stay_u','plan_sown','plan_land','max_sown_land','max_sown_affordable','plan_cash',
                         'plan_hired','plan_labor','classifier_funds','labor_binding','land_binding','value')})
+                if 'endpoint_rescue' in first:
+                    rows[k]['pre_endpoint_rescue']=int(first['endpoint_rescue'][i])
+                if 'development_intensity' in fitted:
+                    rows[k]['development_intensity']=intensity[i]
+                if opening_data is not None and k in opening_data:
+                    rows[k].update(opencheck_grain=conditioned['grain'][i],
+                        opencheck_crop=conditioned['crop'][i],
+                        opencheck_land=opening_data[k]['area_b'])
                 continue
             if 'transition' in e and a.area_kind=='household':
                 import hashlib
@@ -3898,6 +3933,8 @@ class MainModel(Model):
                         rows[k].update({f'post_{j}':last[j][i] for j in (
                             'stay_u','stay_probability','plan_sown','plan_land','max_sown_land','max_sown_affordable',
                             'plan_cash','plan_hired','plan_labor','classifier_funds','labor_binding','land_binding','value')})
+                    if 'endpoint_rescue' in last:
+                        rows[k]['post_endpoint_rescue']=int(last['endpoint_rescue'][i])
             claims[k]=rate*p['eligible']
             if 'transition' in e and a.area_kind=='household':
                 a.prior_crops=p['grain'],p['crop']

@@ -1,0 +1,18 @@
+{
+  "base": "0a088711c6b828a7e36ced5fbf2935acbdb85a1e",
+  "scope": "development_historical_replay_not_held_out",
+  "raw_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+  "fit_donor_years": [2009, 2010],
+  "screen_seeds": [301, 306, 311, 316],
+  "paired_seeds": [301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320],
+  "development_years": [2011, 2012, 2013, 2014, 2015],
+  "I": "Noncohort regional-by-beginning-scale median realized annual grain-and-cash sown area per closing physical mu among comparable active households. Opening physical area is a predictor; donor closing area is only the denominator of the historical target. No same-year observed land or season attribution. Fall back to region then pooled if fewer than 30 observations. Retain the F1 physical land, cash and labor constraints.",
+  "C": "Keep the calibrated directional utility and the original interior draw. Only add the missing pure endpoint if the sampled plan in that direction is not profitable and the pure endpoint is historically observed for that prior group. An endpoint must be economically feasible in the existing plan; a failed endpoint falls through to the original zero/unused plan.",
+  "L": "No behavior change unless the same-household bridge and executed market diagnostic jointly isolate a specific supported contract or market rule.",
+  "selection": {
+    "I": "Improve 2011 grain sown area relative error by at least 0.01 and do not worsen 2014 or 2015 by more than 0.025.",
+    "C": "Reduce 2014-2015 average mixed rate absolute error by at least 0.01 and report pure-grain, pure-cash and mixed entrant counts.",
+    "guard": "For every evaluation year no other gate mean error worsens by more than 0.025 and no less than B0 total five-gate passes. Every adopted change must pass core accounting. Simple lag is a descriptive benchmark, not a budget-coherent alternative."
+  },
+  "formal_gate": "Keep the old five metric thresholds AND 20 seeds per independent group, provenance and accounting; do not select or estimate on independent validation. The absence of qualifying data does not prevent paired historical development."
+}

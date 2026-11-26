@@ -407,6 +407,11 @@ def run_area_structures(destination, mix_mode=None, *, settings=None, observer=N
         v=raw.loc[raw.year.eq(yr)].dropna(subset=['hhid','id'])
         survey.append(keys.merge(v.loc[~v.hhid.duplicated(False)],on=['hhid','id'],validate='1:1'))
     survey=pd.concat(survey)
+    opening_check=settings.get('development_opening_check',False)
+    if opening_check:
+        fields=['year','actor','area_b','sow_food','sow_cash','sow_oother']
+        history=pd.concat([b[fields],survey[fields]],ignore_index=True)
+        history={yr:h.set_index('actor') for yr,h in history.groupby('year')}
     b.drop(columns=['hhid','id']).to_csv(private/'baseline.csv',index=False)
     results=[]; checks=[]; fingerprints=[]
     for seed in settings.get('seeds',(103,109)):
@@ -493,6 +498,8 @@ def run_area_structures(destination, mix_mode=None, *, settings=None, observer=N
                     model.area_economy['behavior_diagnostic']=dict(economic_participation=True)
                 if final_candidate:
                     model.area_economy['behavior_diagnostic'].update(joint_choice=True)
+                if 'C' in settings.get('development_variant',''):
+                    model.area_economy['behavior_diagnostic']['pure_endpoint_fallback']=True
                 if stage>=4:
                     from modules.spatial_index import area_moore_neighbors
                     space=area_moore_neighbors(actors)
@@ -507,6 +514,11 @@ def run_area_structures(destination, mix_mode=None, *, settings=None, observer=N
             if transition is not None: model.area_economy['transition']=transition
             if history is not None: model.area_economy['continuous_crop_history']=history
             for yr in range(2011,2012 if settings.get('ablation') else 2016):
+                if opening_check:
+                    observed=history[yr][['area_b']].join(
+                        history[yr-1][['sow_food','sow_cash','sow_oother']],how='inner')
+                    observed=observed.loc[observed.area_b.ge(0)&observed.sow_food.ge(0)&observed.sow_cash.ge(0)]
+                    model.area_economy['development_opening']=observed.to_dict('index')
                 if use_pool:
                     model.area_economy['scale_pool']=pool[min(2016,yr)]
                 if soft and not stage:

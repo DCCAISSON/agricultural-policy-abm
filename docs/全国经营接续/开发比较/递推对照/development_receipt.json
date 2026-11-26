@@ -1,0 +1,26 @@
+{
+  "comparisons": [
+    {
+      "variant": "I",
+      "seeds": 4,
+      "target_met": false,
+      "no_large_other_gate_loss": true,
+      "joint_noninferiority": true,
+      "candidate_joint_count": 7,
+      "b0_joint_count": 7,
+      "eligible_for_next_development_stage": false
+    },
+    {
+      "variant": "C",
+      "seeds": 4,
+      "target_met": false,
+      "no_large_other_gate_loss": true,
+      "joint_noninferiority": true,
+      "candidate_joint_count": 7,
+      "b0_joint_count": 7,
+      "eligible_for_next_development_stage": false
+    }
+  ],
+  "diagnostic_only": true,
+  "formal_holdout_read": false
+}

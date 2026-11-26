@@ -1,7 +1,7 @@
 """Read-only synthetic land ledger for the household area-economy scheduler."""
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from math import isclose
+from math import fsum, isclose
 
 
 EPS = 1e-7
@@ -33,13 +33,19 @@ class SyntheticLandLedger:
         self.base = {r["actor"]: r for r in baseline}
         self.previous = {}
         self.initial = {}
+        self._previous_operators: dict[str, list[tuple[float, float, str]]] = {}
+        self._previous_planting: dict[str, tuple[float, float]] = {}
         for identity, r in self.base.items():
             grain, cash = r["sow_food"], r["sow_cash"]
+            self._previous_operators[identity] = [(0., r["area_e"], identity)]
             if not (grain >= 0 and cash >= 0 and grain + cash > 0):
                 portions = ((r["area_e"], "unknown"),)
+                if grain == 0. and cash == 0.:
+                    self._previous_planting[identity] = (r["area_e"],0.)
             else:
                 portions = ((r["area_e"]*grain/(grain+cash), "grain"),
                             (r["area_e"]*cash/(grain+cash), "cash"))
+                self._previous_planting[identity] = (r["area_e"], portions[0][0])
             start = 0.
             states = []
             for area, crop in portions:
@@ -49,6 +55,61 @@ class SyntheticLandLedger:
             self.previous[identity] = tuple(states)
             self.initial[identity] = tuple(states)
         self.year = 2010
+
+    def _advance_succession_bounds(
+        self, stock: list[tuple[str, float, float, str]],
+        planting: dict[str, tuple[float, float]],
+    ) -> dict[str, float]:
+        """Bound crop overlap using physical assignments and operator totals only."""
+        current_operators: dict[str, list[tuple[float, float, str]]] = defaultdict(list)
+        overlap: dict[str, dict[str | None, list[float]]] = defaultdict(lambda: defaultdict(list))
+        for unit, start, end, buyer in stock:
+            if unit in self.base:
+                current_operators[unit].append((start, end, buyer))
+            if buyer not in planting:
+                continue
+            if unit not in self.base:
+                overlap[buyer][None].append(end-start)
+                continue
+            for lo, hi, seller in self._previous_operators.get(unit, ()):
+                area = min(hi, end)-max(lo, start)
+                if area > 0.:
+                    overlap[buyer][seller].append(area)
+
+        strict_lower, strict_upper, unknown_lower, unknown_upper = [], [], [], []
+        unknown_stock, previous_pool_stock = [], []
+        for buyer, (area, grain) in planting.items():
+            prior_lower, prior_upper, unknown = [], [], []
+            for seller, pieces in overlap[buyer].items():
+                shared = fsum(pieces)
+                prior = self._previous_planting.get(seller) if seller is not None else None
+                if prior is None:
+                    unknown.append(shared)
+                    if seller is not None and seller.startswith("_area_pool_"):
+                        previous_pool_stock.append(shared)
+                elif seller != buyer:
+                    old_area, old_grain = prior
+                    # Grain in the changed area can be displaced onto the seller's
+                    # other previous land, including land from the transient pool.
+                    prior_lower.append(max(0., old_grain-(old_area-shared)))
+                    prior_upper.append(min(old_grain, shared))
+            unknown_area = fsum(unknown)
+            unknown_stock.append(unknown_area)
+            strict_lower.append(max(0., grain-(area-fsum(prior_lower))))
+            strict_upper.append(min(grain, fsum(prior_upper)))
+            unknown_lower.append(max(0., grain-(area-unknown_area)))
+            unknown_upper.append(min(grain, unknown_area))
+
+        self._previous_operators = current_operators
+        self._previous_planting = planting
+        return dict(
+            strict_succession_lower_mu=fsum(strict_lower),
+            strict_succession_upper_mu=fsum(strict_upper),
+            prior_crop_unknown_mu=fsum(unknown_stock),
+            prior_external_pool_unknown_mu=fsum(previous_pool_stock),
+            grain_on_prior_unknown_lower_mu=fsum(unknown_lower),
+            grain_on_prior_unknown_upper_mu=fsum(unknown_upper),
+        )
 
     def advance(self, year: int, actors: list[dict], contracts: list[dict],
                 external: list[dict], fiscal_budget: float) -> tuple[list[dict], dict]:
@@ -132,6 +193,8 @@ class SyntheticLandLedger:
         paid = sum(r["paid"] for r in rows.values())
         if paid > fiscal_budget+EPS:
             raise ValueError("Fiscal budget exceeded")
+        planting = {k: (r["operated"], goals[k][0]) for k, r in rows.items()}
+        # Preserve the sorted allocation and its points as legacy diagnostics.
         current = defaultdict(list)
         for unit,a,b,k in sorted(stock,key=lambda v:(v[0].startswith("external:"),v[0],v[1])):
             measured[k] += b-a
@@ -213,6 +276,7 @@ class SyntheticLandLedger:
                         producer=p.operator if p.crop in ("grain","cash") else None,
                         previous_assignment=last.operator if last else None,previous_crop=last.crop if last else None,
                         initial_crop=orig.crop if orig else None,crop=p.crop,status=status))
+        counts.update(self._advance_succession_bounds(stock, planting))
         self.previous = {k:tuple(v) for k,v in current.items() if k in self.base}
         self.year = year
         return records,dict(counts)|{"rent_yuan_per_mu_if_traded":internal_rent_mu,"budget_yuan":fiscal_budget}

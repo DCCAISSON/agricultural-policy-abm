@@ -93,6 +93,10 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
     if repaired:
         # New and re-entering farms have a drawn initial composition, not a synthetic incumbent.
         shares[entry]=prior[entry,None]
+    flags=diagnostic or {}
+    endpoint_fallback=flags.get('pure_endpoint_fallback') and flags.get('joint_choice')
+    if endpoint_fallback:
+        shares=np.column_stack((shares,np.zeros(len(prior)),np.ones(len(prior))))
     material = cost_c[:,None] + (cost_g-cost_c)[:,None]*shares
     days = labor_c[:,None] + (labor_g-labor_c)[:,None]*shares
     sales = revenue_c[:,None] + (revenue_g+grain_aid-revenue_c)[:,None]*shares
@@ -101,7 +105,6 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
     cash_cap = np.minimum(funds[:,None]/material,
         (funds+wage*labor)[:,None]/(material+wage[:,None]*days))
     family_cusp = labor[:,None]/days
-    flags=diagnostic or {}
     if trade:
         can_buy = (u[:,4] < expit(x @ fit['rent_in'][1])) & (rent > 0.) if flags.get('rent_in',stage>=2) else rent>0.
         marginal_after_hires = sales-material-wage[:,None]*days-rent[:,None]/intensity[:,None]
@@ -140,6 +143,20 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
     hired = np.where(use_kink,h,selected(hired))
     cost = np.where(use_kink,pc,selected(cost))
     best = np.maximum(best,pv)
+    if endpoint_fallback:
+        # Only rescue an infeasible sampled direction; do not take probability
+        # mass from a feasible interior plan or invent an unobserved endpoint.
+        replace=((total[:,[0,2]]<=1e-8)|(best[:,[0,2]]<=1e-8))
+        replace &= (total[:,3:]>1e-8)&(best[:,3:]>1e-8)&(ep>0.)
+        replace &= np.abs(prior[:,None]-np.array([0.,1.]))>1e-8
+        replace &= ~entry[:,None]
+        ix=np.broadcast_to(np.arange(3),(len(prior),3)).copy()
+        ix[:,[0,2]]=np.where(replace,np.array([3,4]),np.array([0,2]))
+        shares,material,days,sales,total,cost,hired,best,cash_cap,q=(
+            np.take_along_axis(a,ix,axis=1)
+            for a in (shares,material,days,sales,total,cost,hired,best,cash_cap,q))
+        if total_limit.shape[1]>1:
+            total_limit=np.take_along_axis(total_limit,ix,axis=1)
     slack = np.maximum(0.,labor[:,None]-days*total)/180.
     liquid = np.log1p(np.maximum(0.,funds[:,None]-cost))/10.
     if repaired:
@@ -200,4 +217,6 @@ def farm_batch(state, fit, u, *, stage, trade=False, incentive=1., grain_aid=0.,
             plan_labor=total[i,idx]*days[i,idx],classifier_funds=funds,
             labor_binding=total[i,idx]*days[i,idx]>=labor-1e-8,
             land_binding=(total[i,idx]>=full-1e-7)&(total[i,idx]>1e-7))
+    if endpoint_fallback:
+        record['endpoint_rescue']=(ix[i,idx]>=3)&(chosen>1e-8)
     return record
