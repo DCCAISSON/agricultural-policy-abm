@@ -6,7 +6,7 @@ from math import floor, fsum, isclose
 
 import numpy as np
 
-from core.succession_allocation import AREA, CROPS, EPS, CropOffer, joint_allocation, variable_allocation
+from core.succession_allocation import AREA, CROPS, EPS, CropOffer, joint_allocation, refine_mixed_plan, variable_allocation
 
 RATE = 85.
 BUDGET = 7200.
@@ -41,6 +41,7 @@ class Scenario:
     ask_per_mu: float = ASK_PER_MU
     start_cost: float = TENANT_COST
     feedback: bool = True
+    crop_refinement: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -356,6 +357,8 @@ class Succession:
         for k in keys:
             op = self.operators[k]
             plan = allocate(allocated[k],liquid[k],labor[k],wage[k],op.job_days)
+            if self.variable_area and s.crop_refinement:
+                plan = refine_mixed_plan(allocated[k],plan,liquid[k],labor[k],wage[k],op.job_days)
             a = account[k]
             for p in allocated[k]:
                 crop = plan.crops.get(p.id)

@@ -1,6 +1,7 @@
 """Exact joint allocation for two crops on equal-area, indivisible plots."""
 from dataclasses import dataclass
 from itertools import product
+import numpy as np
 
 AREA = 4.0
 # Per mu: physical output, price, preplant cost, peak-season days.
@@ -76,6 +77,55 @@ def variable_allocation(
         if value > best.value+EPS:
             best = Allocation(employed, used_cash, used_days, value)
     return best
+
+
+def refine_mixed_plan(offers: list[CropOffer], base: Allocation, cash: float,
+                      labor: float, wage: float, job_days: float) -> Allocation:
+    """Compare strictly profitable, feasible mixed neighbors of the 7a plan."""
+    if len(offers)<=4 or not base.crops or len(set(base.crops.values()))==2:
+        return base
+    rows=[("", "", 0., 0., 0., 0, 0)]
+    counts={k:sum(c==k for c in base.crops.values()) for k in CROPS}
+    baseline_net=0.
+    for plot in offers:
+        def terms(crop: str) -> tuple[float,float,float]:
+            if not crop:
+                return 0.,0.,0.
+            y,p,c,d=CROPS[crop]
+            grain=crop=="grain"
+            cost=plot.area*c+plot.restart_cash
+            return cost-plot.credit*grain,plot.area*d+plot.restart_days,(
+                plot.area*y*p*plot.quality-cost+plot.grant*grain-plot.forgone_rent)
+        old=base.crops.get(plot.id,"")
+        m,t,net=terms(old)
+        baseline_net+=net
+        for new in ("","grain","cash"):
+            if new==old:
+                continue
+            x,y,g=terms(new)
+            rows.append((plot.id,new,x-m,y-t,g-net,
+                         int(new=="grain")-int(old=="grain"),int(new=="cash")-int(old=="cash")))
+    delta=np.array([x[2:] for x in rows])
+    money=base.cash+delta[:,0,None]+delta[None,:,0]
+    days=base.days+delta[:,1,None]+delta[None,:,1]
+    ids=np.array([x[0] for x in rows])
+    feasible=(ids[:,None]!=ids[None,:]) & (money<=cash+EPS)&(days<=labor+EPS)
+    for i,crop in enumerate(("grain","cash"),3):
+        feasible &= counts[crop]+delta[:,i,None]+delta[None,:,i]>0
+    net=baseline_net+delta[:,2,None]+delta[None,:,2]-wage*np.maximum(0.,days-max(0.,labor-job_days))
+    score=np.where(feasible,net,-np.inf)
+    i,j=np.unravel_index(int(np.argmax(score)),score.shape)
+    if score[i,j]<=base.value+EPS:
+        return base
+    result=base.crops.copy()
+    for k in (i,j):
+        pid,crop,*_=rows[k]
+        if pid:
+            if crop:
+                result[pid]=crop
+            else:
+                result.pop(pid,None)
+    return Allocation(result,float(money[i,j]),float(days[i,j]),float(score[i,j]))
 
 
 def joint_allocation(

@@ -56,7 +56,7 @@ def make_budget(assets: tuple, design: dict) -> RegionalBudget:
 
 def worlds_at_start(seed: int, assets: tuple, design: dict) -> tuple[Succession, ...]:
     scenario = Scenario(owners=0,entrants=0,recovery=False,contract_years=2,
-                        rate=design["nominal_rate_yuan_per_mu"])
+                        rate=design["nominal_rate_yuan_per_mu"],crop_refinement=design.get("crop_refinement",False))
     return tuple(Succession.from_assets(len(assets)*seed+i,scenario,r.households,r.plots,r.grain_kg)
                  for i,r in enumerate(assets))
 

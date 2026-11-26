@@ -1,0 +1,14 @@
+{
+  "agriculture": "M1",
+  "crop_refinement": false,
+  "selection": "M2 strictly improves local objective and mixed incidence but fails registered no-harm check; retain frozen M1 agricultural behavior, not a passed family model",
+  "historical_pairs": 100,
+  "m1_historical_sha256": "8950624c6578353a9dad8f2b838183255ca07e4dee4270f458cbd304c290cabf",
+  "m2_historical_sha256": "2ebda168f6adba9596fb217418311a382435fd8e403d2c9993d3ce655c1c06d3",
+  "candidate_trials": 1,
+  "mixed_mean_error_M1": 0.4362660,
+  "mixed_mean_error_M2": 0.3574565,
+  "grain_mu_physical_vs_mu_seasons_mean_error_M1": 0.3582492,
+  "grain_mu_physical_vs_mu_seasons_mean_error_M2": 0.4056839,
+  "scope": "Retrospective directional tests, not independent validation or same-unit crop area qualification"
+}
