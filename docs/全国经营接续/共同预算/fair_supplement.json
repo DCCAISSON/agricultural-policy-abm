@@ -1,0 +1,220 @@
+{
+  "verified_code": 2,
+  "verified_result_files": 8,
+  "action_counts_match": true,
+  "main_q_decisions": 1536,
+  "main_q_fallbacks": 19,
+  "mean_points": {
+    "cash_labor_tight": {
+      "dev_selected_fixed": {
+        "grain_kg": 448591.57367101824,
+        "spending_yuan": 0.0
+      },
+      "fitted_q": {
+        "grain_kg": 451597.1231545699,
+        "spending_yuan": 2765.625
+      },
+      "grain_post": {
+        "grain_kg": 475647.31593211263,
+        "spending_yuan": 41925.0
+      },
+      "grain_pre": {
+        "grain_kg": 479596.6886853378,
+        "spending_yuan": 42304.6875
+      },
+      "grain_pre_stop": {
+        "grain_kg": 462369.35062515736,
+        "spending_yuan": 15759.375
+      },
+      "myopic": {
+        "grain_kg": 450097.6757061534,
+        "spending_yuan": 377.34375
+      },
+      "none": {
+        "grain_kg": 448591.57367101824,
+        "spending_yuan": 0.0
+      },
+      "takeover_post": {
+        "grain_kg": 451166.33630250033,
+        "spending_yuan": 1087.5
+      },
+      "takeover_pre": {
+        "grain_kg": 451501.4185712801,
+        "spending_yuan": 1101.5625
+      },
+      "takeover_pre_stop": {
+        "grain_kg": 449821.05688489194,
+        "spending_yuan": 611.71875
+      },
+      "transparent": {
+        "grain_kg": 459757.4313218261,
+        "spending_yuan": 9227.34375
+      }
+    },
+    "high_search_failure": {
+      "dev_selected_fixed": {
+        "grain_kg": 460806.165657989,
+        "spending_yuan": 0.0
+      },
+      "fitted_q": {
+        "grain_kg": 463940.91250069236,
+        "spending_yuan": 3103.125
+      },
+      "grain_post": {
+        "grain_kg": 484329.09778136114,
+        "spending_yuan": 42817.96875
+      },
+      "grain_pre": {
+        "grain_kg": 489125.90789660043,
+        "spending_yuan": 43265.625
+      },
+      "grain_pre_stop": {
+        "grain_kg": 474066.27247126884,
+        "spending_yuan": 15946.875
+      },
+      "myopic": {
+        "grain_kg": 462148.51934959367,
+        "spending_yuan": 337.5
+      },
+      "none": {
+        "grain_kg": 460806.165657989,
+        "spending_yuan": 0.0
+      },
+      "takeover_post": {
+        "grain_kg": 461985.65507385303,
+        "spending_yuan": 794.53125
+      },
+      "takeover_pre": {
+        "grain_kg": 462598.9533175272,
+        "spending_yuan": 864.84375
+      },
+      "takeover_pre_stop": {
+        "grain_kg": 461647.875017447,
+        "spending_yuan": 450.0
+      },
+      "transparent": {
+        "grain_kg": 469809.7782975937,
+        "spending_yuan": 8922.65625
+      }
+    },
+    "middle": {
+      "dev_selected_fixed": {
+        "grain_kg": 455822.8416727563,
+        "spending_yuan": 0.0
+      },
+      "fitted_q": {
+        "grain_kg": 458194.41080443456,
+        "spending_yuan": 2716.40625
+      },
+      "grain_post": {
+        "grain_kg": 481910.84263714124,
+        "spending_yuan": 42543.75
+      },
+      "grain_pre": {
+        "grain_kg": 485985.1949932887,
+        "spending_yuan": 42953.90625
+      },
+      "grain_pre_stop": {
+        "grain_kg": 469453.5520428572,
+        "spending_yuan": 16094.53125
+      },
+      "myopic": {
+        "grain_kg": 456563.1228587442,
+        "spending_yuan": 389.0625
+      },
+      "none": {
+        "grain_kg": 455822.8416727563,
+        "spending_yuan": 0.0
+      },
+      "takeover_post": {
+        "grain_kg": 458196.1449900567,
+        "spending_yuan": 1387.5
+      },
+      "takeover_pre": {
+        "grain_kg": 458267.4696846395,
+        "spending_yuan": 1446.09375
+      },
+      "takeover_pre_stop": {
+        "grain_kg": 457101.9778983666,
+        "spending_yuan": 904.6875
+      },
+      "transparent": {
+        "grain_kg": 466256.0229215333,
+        "spending_yuan": 9684.375
+      }
+    },
+    "mean_of_designs": {
+      "dev_selected_fixed": {
+        "grain_kg": 455073.52700058784,
+        "spending_yuan": 0.0
+      },
+      "fitted_q": {
+        "grain_kg": 457910.8154865656,
+        "spending_yuan": 2861.71875
+      },
+      "grain_post": {
+        "grain_kg": 480629.085450205,
+        "spending_yuan": 42428.90625
+      },
+      "grain_pre": {
+        "grain_kg": 484902.59719174233,
+        "spending_yuan": 42841.40625
+      },
+      "grain_pre_stop": {
+        "grain_kg": 468629.7250464278,
+        "spending_yuan": 15933.59375
+      },
+      "myopic": {
+        "grain_kg": 456269.77263816376,
+        "spending_yuan": 367.96875
+      },
+      "none": {
+        "grain_kg": 455073.52700058784,
+        "spending_yuan": 0.0
+      },
+      "takeover_post": {
+        "grain_kg": 457116.04545547004,
+        "spending_yuan": 1089.84375
+      },
+      "takeover_pre": {
+        "grain_kg": 457455.94719114894,
+        "spending_yuan": 1137.5
+      },
+      "takeover_pre_stop": {
+        "grain_kg": 456190.3032669018,
+        "spending_yuan": 655.46875
+      },
+      "transparent": {
+        "grain_kg": 465274.41084698436,
+        "spending_yuan": 9278.125
+      }
+    }
+  },
+  "strategies_dominating_q_at_mean": {
+    "cash_labor_tight": [],
+    "high_search_failure": [],
+    "middle": [
+      "takeover_post",
+      "takeover_pre"
+    ],
+    "mean_of_designs": []
+  },
+  "middle_fixed_p3_minus_q": {
+    "grain_kg": {
+      "mean": 73.05888020487328,
+      "low": -870.8922879461941,
+      "high": 1017.0100483559406,
+      "n": 64
+    },
+    "spending_yuan": {
+      "mean": -1270.3125,
+      "low": -1986.2936462644998,
+      "high": -554.3313537355003,
+      "n": 64
+    }
+  },
+  "pre_stop_mean_expenditure": {
+    "grain_pre_stop": 15933.59375,
+    "takeover_pre_stop": 655.46875
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "base": "7a304a8ab33af8b2ca9ee3225428c900c8f5d02d",
+  "base_blobs_lf": {
+    "core/land_succession.py": "1be991b71bc6f947a0685f9ad13ced31ef3c01a2",
+    "core/succession_allocation.py": "b8e2dbf66b59a4ded934181a7c5ef405966af3da"
+  },
+  "regions": [
+    {"id": "A", "condition": "middle", "search_failure": 0.25, "cash": 0.73, "labor": 0.77},
+    {"id": "B", "condition": "cash_labor_tight", "search_failure": 0.18, "cash": 0.66, "labor": 0.49}
+  ],
+  "budget_yuan": 7200,
+  "positive_region_caps_yuan": [3600, 7200],
+  "policies": ["none", "grain_pre", "takeover_pre"],
+  "nominal_rate_yuan_per_mu": 85,
+  "horizon": 8,
+  "pulse_years": 1,
+  "contract_years": 1,
+  "seeds_inclusive": [330001, 330128],
+  "seed_mapping": "2*pair_seed plus zero-based region index",
+  "comparison": "Same instrument and common cap, high A minus high B. Also report both low and no additional support. Years 2-8 are all none.",
+  "gate_metrics": ["first_year_grain_kg", "cumulative_grain_kg"],
+  "gate": "Compare first-year and eight-year total grain. Start stage 2 only if at least one same-instrument contrast has opposite signs and both Bonferroni intervals exclude zero, across two instruments and two windows. Stage 1 is an allocation and dynamic persistence experiment, not an equal realized cost comparison.",
+  "gate_family_alpha": 0.05,
+  "gate_family_size": 4,
+  "next_stage_if_pass": "Use disjoint development and evaluation seed ranges. Fitted tabular Q and myopic use the same opening public grain bins, remaining horizon and common action samples; strong regional fixed chosen only in development. Common annual spending cap masks infeasible joint moves. Report grains, paid budget, downstream grain and the two-objective frontier separately."
+}

@@ -1,0 +1,17 @@
+{
+  "audit": "passed",
+  "paths": 896,
+  "region_year_rows": 14336,
+  "paired_estimates": 1242,
+  "stage_2_eligible": false,
+  "checks": [
+    "grid",
+    "common cap",
+    "regional fiscal rows",
+    "stop cutoff",
+    "cash rollover",
+    "unchanged P0 in unfunded regions",
+    "paired estimates",
+    "training gate"
+  ]
+}

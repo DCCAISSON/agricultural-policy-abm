@@ -1,0 +1,32 @@
+{
+  "design_sha256": "3b2d35b8e072c858bd09e6f772e5f99d52a81067c426e5ffe0796ad062465750",
+  "paths": 896,
+  "region_year_rows": 14336,
+  "decisions": [
+    {
+      "instrument": "grain_pre",
+      "first_year_interval": [
+        -2017.0545957970244,
+        629.3521736056168
+      ],
+      "cumulative_interval": [
+        -2799.920273966928,
+        1937.3413639248404
+      ],
+      "supported_reversal": false
+    },
+    {
+      "instrument": "takeover_pre",
+      "first_year_interval": [
+        -347.2342059333991,
+        422.38597887403677
+      ],
+      "cumulative_interval": [
+        -780.702880224827,
+        1113.7148380222402
+      ],
+      "supported_reversal": false
+    }
+  ],
+  "stage_2_eligible": false
+}

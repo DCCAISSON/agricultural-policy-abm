@@ -1,0 +1,9 @@
+{
+  "audit": "passed",
+  "release_files": 8,
+  "annual_rows": 17920,
+  "paths": 2240,
+  "paired_q_rows": 320,
+  "post_stop_rows": 48,
+  "verified": "hashes, path structure, common seeds, fitted Q/Myopic action replay, fixed selection, one-year lag, annual rewards, budget, support stop, paired statistics"
+}
