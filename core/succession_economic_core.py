@@ -1,5 +1,6 @@
 """One physical-season activity budget for own farming, bidding and execution."""
 from dataclasses import dataclass
+from functools import lru_cache
 from math import fsum, isfinite
 from warnings import catch_warnings, filterwarnings
 
@@ -69,19 +70,45 @@ def solve(economics, offers, cash, labor, wage, job_days, market=0):
     if not offers or not activities:
         job = min(labor, job_days)
         return Plan({}, 0., 0., 0., job, wage*job, 0., 0.)
+    groups = {}
+    for p in offers:
+        groups.setdefault((p.quality,p.grant/p.area,p.credit/p.area),[]).append(p)
+    terms = tuple((*key,fsum(p.area for p in lots)) for key,lots in groups.items())
+    areas, money, days, hired, job, value, cash_shadow, time_shadow = _portfolio(
+        activities,terms,cash,labor,wage,job_days,economics.hired_wage,economics.hired_limit)
+    result = {}
+    for lots, allocation in zip(groups.values(),areas,strict=True):
+        supply = list(allocation)
+        for p in lots:
+            remaining = p.area
+            used = []
+            for i,a in enumerate(activities):
+                placed = min(remaining,supply[i])
+                if placed > EPS:
+                    remaining -= placed
+                    supply[i] -= placed
+                    used.append((a,placed))
+            if used:
+                result[p.id] = tuple(used)
+    return Plan(result,money,days,hired,job,value,cash_shadow,time_shadow)
+
+
+@lru_cache(maxsize=8192)
+def _portfolio(activities,terms,cash,labor,wage,job_days,hired_wage,hired_limit):
+    """Identical economic acres share a land row; only amounts enter the LP."""
     k = len(activities)
-    n = len(offers)*k
+    n = len(terms)*k
     money, days, value = (np.zeros(n+2) for _ in range(3))
-    land = np.zeros((len(offers), n+2))
-    for i, p in enumerate(offers):
+    land = np.zeros((len(terms), n+2))
+    for i,(quality,grant,credit,_) in enumerate(terms):
         for j, a in enumerate(activities):
             col = i*k+j
             land[i, col] = 1.
-            money[col] = a.inputs - (p.credit/p.area if a.grain else 0.)
+            money[col] = a.inputs - (credit if a.grain else 0.)
             days[col] = a.days
-            value[col] = a.kg*a.unit_value*p.quality - a.inputs + (p.grant/p.area if a.grain else 0.)
-    money[-1] = economics.hired_wage
-    value[-1] = -economics.hired_wage
+            value[col] = a.kg*a.unit_value*quality - a.inputs + (grant if a.grain else 0.)
+    money[-1] = hired_wage
+    value[-1] = -hired_wage
     value[-2] = wage
     time = days.copy()
     time[-2:] = (1., -1.)
@@ -92,17 +119,16 @@ def solve(economics, offers, cash, labor, wage, job_days, market=0):
     with catch_warnings():
         filterwarnings("ignore",message="Unrecognized options detected:.*threads",category=OptimizeWarning)
         optimum = linprog(-value, A_ub=np.vstack((land, money, time, hire_only)),
-                          b_ub=[*(p.area for p in offers), max(0.,cash), labor, 0.],
-                          bounds=[(0., None)]*n+[(0., job_days if wage > 0 else 0.), (0., economics.hired_limit)],
+                          b_ub=[*(v[-1] for v in terms), max(0.,cash), labor, 0.],
+                          bounds=[(0., None)]*n+[(0., job_days if wage > 0 else 0.), (0., hired_limit)],
                           method="highs",options={"threads":1})
     if not optimum.success:
         raise RuntimeError(f"Production allocation failed: {optimum.message}")
     x = optimum.x
-    return Plan({p.id: rows for i, p in enumerate(offers)
-                 if (rows := tuple((a, float(x[i*k+j])) for j, a in enumerate(activities) if x[i*k+j] > EPS))},
-                float(money@x), float(days@x), float(x[-1]), float(x[-2]), float(-optimum.fun),
-                max(0.,-float(optimum.ineqlin.marginals[-3])),
-                max(0.,-float(optimum.ineqlin.marginals[-2])))
+    return (tuple(tuple(float(v) for v in x[i*k:(i+1)*k]) for i in range(len(terms))),
+            float(money@x), float(days@x), float(x[-1]), float(x[-2]), float(-optimum.fun),
+            max(0.,-float(optimum.ineqlin.marginals[-3])),
+            max(0.,-float(optimum.ineqlin.marginals[-2])))
 
 
 def offer(plot, policy, rate, *, takeover=False):

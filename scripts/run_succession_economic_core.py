@@ -151,27 +151,39 @@ def run(project, out, workers):
     arms = zip(registered["arms"],(None,LEGACY_ACTIVITIES,named),strict=True)
     jobs = [(name,seed,economic,design,assets,scopes,registered["years"])
             for name,economic in arms for seed in registered["seeds"]]
+    out.mkdir(parents=True,exist_ok=False)
+    paths = out/"path_checkpoints"
+    paths.mkdir()
+    results = []
+
+    def collect(iterator):
+        for (arm,seed,*_),result in zip(jobs,iterator,strict=True):
+            _heterogeneous_csv(paths/f"{arm}_{seed}_region_year.csv",result[0])
+            csv_write(paths/f"{arm}_{seed}_household_history.csv",result[1])
+            csv_write(paths/f"{arm}_{seed}_crop_year.csv",result[2])
+            results.append(result)
+            print(f"Completed {arm} / {seed}",flush=True)
+
     if workers==1:
-        runs = list(map(_path,jobs))
+        collect(map(_path,jobs))
     else:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            runs = list(pool.map(_path,jobs))
-    out.mkdir(parents=True,exist_ok=False)
+            collect(pool.map(_path,jobs))
     _heterogeneous_csv(out/"activity_evidence.csv",parameters)
     csv_write(out/"dictionary_trace.csv",mapping)
     choices = [dict(name=a.name,is_grain=a.grain,yield_kg_mu=a.kg,value_2024_kg=a.unit_value,
                     inputs_2024_mu=a.inputs,labor_days_mu=a.days,sold_share=a.sold,
                     provinces=";".join(map(str,a.markets))) for a in named.activities]
     csv_write(out/"enabled_parameters.csv",choices)
-    _heterogeneous_csv(out/"region_year.csv",[row for run in runs for row in run[0]])
+    _heterogeneous_csv(out/"region_year.csv",[row for run in results for row in run[0]])
     for idx,name in enumerate(("household_history","crop_year"),start=1):
-        csv_write(out/f"{name}.csv",[row for run in runs for row in run[idx]])
+        csv_write(out/f"{name}.csv",[row for run in results for row in run[idx]])
     json_write(out/"receipt.json",dict(status="structural accounts checked; historical comparison not validation",
         python=platform.python_version(),scipy=scipy.__version__,pandas=pd.__version__,source_sha256=inputs,
         cohort=signatures,design_sha256=digest(lock),specifications=registered["arms"],seeds=registered["seeds"],
-        episode_count=len(jobs),region_years=sum(len(r[0]) for r in runs),
-        household_years=sum(a["audited_actors"] for r in runs for a in r[0]),
-        plot_years=sum(a["audited_plots"] for r in runs for a in r[0]),
+        episode_count=len(jobs),region_years=sum(len(r[0]) for r in results),
+        household_years=sum(a["audited_actors"] for r in results for a in r[0]),
+        plot_years=sum(a["audited_plots"] for r in results for a in r[0]),
         RL_trained=False,policy_ranked=False))
 
 
