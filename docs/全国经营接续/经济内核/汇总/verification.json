@@ -1,0 +1,26 @@
+{
+  "path_rows": 60,
+  "regional_annual_rows": 240,
+  "matching_main_artifacts": {
+    "activity_evidence.csv": "3ed271dad5b2b6f09b7768a51b8f6affe296b848b0f58846bc5107212e974cc1",
+    "crop_year.csv": "172fff7a7c353833973d89f901330b05a2284a01a2bb5012e386be11e48d7e4b",
+    "dictionary_trace.csv": "1ad3128eb0c78926144305b832169e6b70159455d7a72f0ff578472e8d05ca92",
+    "enabled_parameters.csv": "85d38e17f0bb60c824159142581ccdd6094cc72beca8d25a13b34680f3dddf66",
+    "household_history.csv": "7db9af898c10f2abadc7961e4a0c9e792486eee84a95c55f0dac25d00bf059be",
+    "receipt.json": "7b1b65bb759b2e8d15e6837eda7c0137cf7e93b58337b42be831b9ea16f3a72f",
+    "region_year.csv": "900d9c1d1e3456a9e07555286a6ffa70d3434ecf74cb57f3c5cff81aceed7258"
+  },
+  "matching_resource_artifacts": {
+    "grain_labor_marginal_coverage.csv": "02d3f52cc490c5d118c9ed6fa47072d38e188a4a908c4e808c5f78c306ac7bcf",
+    "land_dictionary_trace.csv": "e15cf43563be86b70bbeae456fba9379362a5d0be9f6580b87ef216c73db5eb6",
+    "member_labor_coverage.csv": "765165bdcc82846ce471df5ae489590bdde737a10c03c47867fa4bfd472bc43e",
+    "nfps_reported_land_scope.csv": "805b8a032a759070e8c866cbe438f423debe63930394dcbc4a8cc2e15e140e1f",
+    "opening_resource_sensitivity.csv": "11fc8637df820f7366c01507330905472b278671abcb49cbd672e13deaedcbb6",
+    "receipt.json": "a8300cc7be84d9b474060368ca0490b4d2249b2afb9d6d4d248f404c6f48164f"
+  },
+  "RL_trained": false,
+  "policy_ranked": false,
+  "suppressed_wages": 3,
+  "suppressed_resource_rows": 10,
+  "scope": "same seed/program deterministic check, not independent empirical validation"
+}

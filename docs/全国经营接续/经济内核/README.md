@@ -24,6 +24,8 @@
 
 ## 结果索引
 
+先读[实算与裁决](结果与裁决.md)。下列出表在[汇总目录](汇总)，含脱敏结果、两个测试回执、输入指纹与复算校验。
+
 - activity_evidence.csv、enabled_parameters.csv、dictionary_trace.csv：实读字段、有效分母和实际生效单位。
 - household_history.csv：逐年、规格、种子的同户汇总，不含户号。region_year.csv、crop_year.csv：地区年度账及具名作物实物量。
 - opening_resource_sensitivity.csv：固定已知期初土地组合上的资源对照。nfps_reported_land_scope.csv：两项均报告的地租流转记录及单独的期初期末面积分母。

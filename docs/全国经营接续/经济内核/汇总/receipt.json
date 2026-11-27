@@ -1,0 +1,94 @@
+{
+  "status": "structural accounts checked; historical comparison not validation",
+  "python": "3.11.2",
+  "scipy": "1.15.2",
+  "pandas": "2.2.3",
+  "source_sha256": {
+    "校准用数据源\\全国农村固定观察点\\2009-2015household.csv": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+    "校准用数据源\\全国农村固定观察点\\2016-2017household.csv": "67a89cf019ea9f9ecf9d1dccd46632d55712fd3585c04b5be2bcb26d94606fc9",
+    "校准用数据源\\全国农村固定观察点\\household variables2009-2015.xlsx": "f7e4b203b2816e74eda67a55a9e8e2bf4153fe3d26f4062552d66a6d48bf86d2",
+    "校准用数据源\\全国农村固定观察点\\household variables2016-2017.xlsx": "796a61341489c51fe81337b6e7818f6ba6ca146c2c0f9cef7aca5b2b4882de30",
+    "校准用数据源\\全国农村固定观察点\\2009-2017农户调查问卷.txt": "3b9fadcc9e231c1b50cca625085a92ab9ce3cde8566205689bd90e04ab9e9c23",
+    "results\\diagnostics\\national_crop_choice_soft_response_20261123\\PRIVATE_DO_NOT_SHARE\\cohort600.json": "28b094c623a9ee0138f08b084422e37f04e850b187051cb88706439e18f45936",
+    "config\\experiments\\national_real2024_cpi_20260909.csv": "8ad1df21424e5eac9139779f1d7551c2e248f2a05c3b0bca7d59841a3e290b3e"
+  },
+  "cohort": {
+    "household_baseline_sha256": "2521c3a80c35fc39068fcf79db02eaff54a1b31683e3f1e948a86f37c913d917",
+    "cohort_link_sha256": "28b094c623a9ee0138f08b084422e37f04e850b187051cb88706439e18f45936",
+    "nfps_2009_2015_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+    "family_labor_count_proxies": 28,
+    "regions": [
+      {
+        "region": "东部",
+        "households": 141,
+        "provinces": 10,
+        "physical_mu": 699.5,
+        "verified_mu": 582.3,
+        "synthetic_lots": 396,
+        "observed_initial_grain_kg": 268681.5,
+        "under_reserve": 7,
+        "missing_right": 7,
+        "proxy_savings": 59,
+        "proxy_wages": 120
+      },
+      {
+        "region": "中部",
+        "households": 173,
+        "provinces": 6,
+        "physical_mu": 958.4,
+        "verified_mu": 732.2,
+        "synthetic_lots": 511,
+        "observed_initial_grain_kg": 511411.0,
+        "under_reserve": 8,
+        "missing_right": 18,
+        "proxy_savings": 94,
+        "proxy_wages": 149
+      },
+      {
+        "region": "西部",
+        "households": 185,
+        "provinces": 10,
+        "physical_mu": 1208.8,
+        "verified_mu": 876.2,
+        "synthetic_lots": 576,
+        "observed_initial_grain_kg": 492762.0,
+        "under_reserve": 11,
+        "missing_right": 25,
+        "proxy_savings": 125,
+        "proxy_wages": 164
+      },
+      {
+        "region": "东北",
+        "households": 101,
+        "provinces": 3,
+        "physical_mu": 2410.8,
+        "verified_mu": 1818.5,
+        "synthetic_lots": 727,
+        "observed_initial_grain_kg": 778773.0,
+        "under_reserve": 0,
+        "missing_right": 5,
+        "proxy_savings": 47,
+        "proxy_wages": 95
+      }
+    ],
+    "dictionary_sha256": "f7e4b203b2816e74eda67a55a9e8e2bf4153fe3d26f4062552d66a6d48bf86d2"
+  },
+  "design_sha256": "bfc471b0430faaf6d3608eb9488041d13c96eae4e14f3cdef7d9cec449056a32",
+  "specifications": [
+    "legacy-M1",
+    "shared-core-legacy-parameters",
+    "named-activity-candidate"
+  ],
+  "seeds": [
+    571001,
+    571002,
+    571003,
+    571004
+  ],
+  "episode_count": 12,
+  "region_years": 240,
+  "household_years": 36000,
+  "plot_years": 132600,
+  "RL_trained": false,
+  "policy_ranked": false
+}

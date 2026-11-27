@@ -1,0 +1,15 @@
+{
+  "source_sha256": {
+    "校准用数据源\\全国农村固定观察点\\2009-2015household.csv": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+    "校准用数据源\\全国农村固定观察点\\2016-2017household.csv": "67a89cf019ea9f9ecf9d1dccd46632d55712fd3585c04b5be2bcb26d94606fc9",
+    "校准用数据源\\全国农村固定观察点\\household variables2009-2015.xlsx": "f7e4b203b2816e74eda67a55a9e8e2bf4153fe3d26f4062552d66a6d48bf86d2",
+    "校准用数据源\\全国农村固定观察点\\household variables2016-2017.xlsx": "796a61341489c51fe81337b6e7818f6ba6ca146c2c0f9cef7aca5b2b4882de30",
+    "校准用数据源\\全国农村固定观察点\\2009-2017农户调查问卷.txt": "3b9fadcc9e231c1b50cca625085a92ab9ce3cde8566205689bd90e04ab9e9c23",
+    "results\\diagnostics\\national_crop_choice_soft_response_20261123\\PRIVATE_DO_NOT_SHARE\\cohort600.json": "28b094c623a9ee0138f08b084422e37f04e850b187051cb88706439e18f45936",
+    "config\\experiments\\national_real2024_cpi_20260909.csv": "8ad1df21424e5eac9139779f1d7551c2e248f2a05c3b0bca7d59841a3e290b3e",
+    "校准用数据源\\全国农村固定观察点\\2009-2015individual.csv": "babc85347ba844ed8f9e0a5de2dbc4c38055a99173eab707e27a46bd4c5e232e",
+    "校准用数据源\\全国农村固定观察点\\individual variables2009-2015.xlsx": "f4ccfb9e3b4583fdc7cca4a283b6fd39234ef8115a13f050715d65b87371cca6"
+  },
+  "hired_wage_2024": 110.27520051927011,
+  "boundary": "Same opening rights/CPI; one season, no market, no fiscal treatment, no RP forecast; hire limit = household opening labor; no inferred mechanization or external pool. Land rows aggregate only reporters with both valid fields, not new transaction counts."
+}
