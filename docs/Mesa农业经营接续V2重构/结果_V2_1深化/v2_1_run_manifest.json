@@ -1,0 +1,110 @@
+{
+  "design_id": "NFPS600-Mesa-AgriABM-RL-v2.1",
+  "elapsed_seconds": 1803.02,
+  "n_eval_seeds_standard": 48,
+  "n_eval_seeds_asymmetric": 32,
+  "std_contrasts": [
+    {
+      "env_tag": "intertemporal_v2_1",
+      "contrast": "gov_rl_minus_p0",
+      "grain_8yr_diff_tons": 1345.375,
+      "grain_ci95": "[1323.11, 1367.64]",
+      "spending_8yr_diff_wan": 111.551,
+      "spending_ci95": "[111.169, 111.933]",
+      "withdrawal_diff_tons": 378.877,
+      "withdrawal_ci95": "[357.83, 399.92]"
+    },
+    {
+      "env_tag": "intertemporal_v2_1",
+      "contrast": "gov_rl_minus_uniform_fixed",
+      "grain_8yr_diff_tons": -90.288,
+      "grain_ci95": "[-110.65, -69.93]",
+      "spending_8yr_diff_wan": 52.446,
+      "spending_ci95": "[52.058, 52.835]",
+      "withdrawal_diff_tons": -72.896,
+      "withdrawal_ci95": "[-94.06, -51.74]"
+    },
+    {
+      "env_tag": "intertemporal_v2_1",
+      "contrast": "gov_rl_minus_regional_fixed",
+      "grain_8yr_diff_tons": -117.255,
+      "grain_ci95": "[-136.23, -98.28]",
+      "spending_8yr_diff_wan": 18.579,
+      "spending_ci95": "[18.183, 18.974]",
+      "withdrawal_diff_tons": -50.086,
+      "withdrawal_ci95": "[-70.76, -29.41]"
+    },
+    {
+      "env_tag": "intertemporal_v2_1",
+      "contrast": "gov_rl_minus_transparent_rule",
+      "grain_8yr_diff_tons": 779.163,
+      "grain_ci95": "[756.22, 802.10]",
+      "spending_8yr_diff_wan": 15.883,
+      "spending_ci95": "[15.422, 16.344]",
+      "withdrawal_diff_tons": 186.952,
+      "withdrawal_ci95": "[165.97, 207.93]"
+    },
+    {
+      "env_tag": "intertemporal_v2_1",
+      "contrast": "gov_rl_minus_myopic",
+      "grain_8yr_diff_tons": 822.964,
+      "grain_ci95": "[798.46, 847.47]",
+      "spending_8yr_diff_wan": -2.796,
+      "spending_ci95": "[-3.479, -2.113]",
+      "withdrawal_diff_tons": 262.412,
+      "withdrawal_ci95": "[242.84, 281.98]"
+    }
+  ],
+  "asym_contrasts": [
+    {
+      "env_tag": "coupled_asymmetric_v2_1",
+      "contrast": "gov_rl_minus_p0",
+      "grain_8yr_diff_tons": 1370.397,
+      "grain_ci95": "[1349.21, 1391.58]",
+      "spending_8yr_diff_wan": 88.775,
+      "spending_ci95": "[88.011, 89.539]",
+      "withdrawal_diff_tons": 409.56,
+      "withdrawal_ci95": "[398.30, 420.81]"
+    },
+    {
+      "env_tag": "coupled_asymmetric_v2_1",
+      "contrast": "gov_rl_minus_uniform_fixed",
+      "grain_8yr_diff_tons": 876.166,
+      "grain_ci95": "[859.07, 893.27]",
+      "spending_8yr_diff_wan": -30.576,
+      "spending_ci95": "[-31.340, -29.812]",
+      "withdrawal_diff_tons": 308.18,
+      "withdrawal_ci95": "[299.32, 317.04]"
+    },
+    {
+      "env_tag": "coupled_asymmetric_v2_1",
+      "contrast": "gov_rl_minus_regional_fixed",
+      "grain_8yr_diff_tons": 48.187,
+      "grain_ci95": "[44.34, 52.04]",
+      "spending_8yr_diff_wan": 22.679,
+      "spending_ci95": "[21.924, 23.434]",
+      "withdrawal_diff_tons": 4.326,
+      "withdrawal_ci95": "[0.89, 7.76]"
+    },
+    {
+      "env_tag": "coupled_asymmetric_v2_1",
+      "contrast": "gov_rl_minus_transparent_rule",
+      "grain_8yr_diff_tons": 2048.761,
+      "grain_ci95": "[2019.89, 2077.63]",
+      "spending_8yr_diff_wan": -4.346,
+      "spending_ci95": "[-5.218, -3.474]",
+      "withdrawal_diff_tons": 279.176,
+      "withdrawal_ci95": "[269.47, 288.88]"
+    },
+    {
+      "env_tag": "coupled_asymmetric_v2_1",
+      "contrast": "gov_rl_minus_myopic",
+      "grain_8yr_diff_tons": 878.447,
+      "grain_ci95": "[861.08, 895.81]",
+      "spending_8yr_diff_wan": -26.713,
+      "spending_ci95": "[-28.160, -25.266]",
+      "withdrawal_diff_tons": 308.18,
+      "withdrawal_ci95": "[299.32, 317.04]"
+    }
+  ]
+}

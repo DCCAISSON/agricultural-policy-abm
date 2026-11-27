@@ -92,13 +92,16 @@ def build_policy_menu(regions: tuple[CalibratedRegionV2, ...], design: V2Design)
 
     def max_useful_for(r_idx: int, inst: str) -> int:
         reg = regions[r_idx]
-        if inst.startswith("producer_"):
+        clean_i = inst.removesuffix("@xver")
+        if clean_i.startswith("producer_"):
             return floor(design.producer_cap_yuan_per_mu * reg.physical_area)
-        if inst.startswith("scale_takeover_"):
+        if clean_i.startswith("scale_takeover_"):
             pool = max(reg.verified_tradable_area * reg.tech.scale_pool_share, 0.30 * reg.physical_area)
             return floor(design.scale_takeover_cap_yuan_per_mu * pool)
-        if inst == "service_trusteeship":
+        if clean_i == "service_trusteeship":
             return floor(design.service_cap_yuan_per_mu * reg.physical_area)
+        if clean_i == "order_farming":
+            return floor(design.order_cap_yuan_per_mu * reg.physical_area)
         return 0
 
     actions: list[JointActionV2] = [(OFF_LOCAL,) * n_reg]
@@ -137,7 +140,34 @@ def build_policy_menu(regions: tuple[CalibratedRegionV2, ...], design: V2Design)
     for spec in tailored_specs:
         actions.append(tuple((spec[i], prop_all[i]) if prop_all[i] > 0 else OFF_LOCAL for i in range(n_reg)))
 
-    assert len(actions) == 25
+    if design.menu_mode == "v2_25":
+        assert len(actions) == 25
+    elif design.menu_mode == "v2_1_portfolio":
+        # Actions 25..31: Cross-instrument regional portfolios + Order Grain + Beidou/Cross-Verification Governance
+        if budget <= 0:
+            for _ in range(7):
+                actions.append((OFF_LOCAL,) * n_reg)
+        else:
+            e_50 = min(floor(0.50 * budget), max_useful_for(0, "producer_post"))
+            sp_50 = split_by_area(budget - e_50, (1, 2, 3))
+            # 25: East tilt producer_post + Central/West/NE service_trusteeship (builds 3-region K_svc!)
+            actions.append((("producer_post", e_50), ("service_trusteeship", sp_50[1]), ("service_trusteeship", sp_50[2]), ("service_trusteeship", sp_50[3])))
+            # 26: East tilt producer_pre + Central/West/NE service_trusteeship
+            actions.append((("producer_pre", e_50), ("service_trusteeship", sp_50[1]), ("service_trusteeship", sp_50[2]), ("service_trusteeship", sp_50[3])))
+            # 27: Area-proportional East producer_post + Central/West/NE service_trusteeship
+            actions.append((("producer_post", prop_all[0]), ("service_trusteeship", prop_all[1]), ("service_trusteeship", prop_all[2]), ("service_trusteeship", prop_all[3])))
+            # 28: National uniform order_farming
+            actions.append(tuple(("order_farming", prop_all[i]) if prop_all[i] > 0 else OFF_LOCAL for i in range(n_reg)))
+            # 29: East producer_post + Central/West service_trusteeship + Northeast order_farming
+            actions.append((("producer_post", prop_all[0]), ("service_trusteeship", prop_all[1]), ("service_trusteeship", prop_all[2]), ("order_farming", prop_all[3])))
+            # 30: Cross-Verified Digital Governance + East producer_post & 3-region service_trusteeship
+            actions.append((("producer_post@xver", prop_all[0]), ("service_trusteeship@xver", prop_all[1]), ("service_trusteeship@xver", prop_all[2]), ("service_trusteeship@xver", prop_all[3])))
+            # 31: Cross-Verified Digital Governance + Scale/Producer/Service Mix
+            actions.append((("producer_post@xver", prop_all[0]), ("scale_takeover_pre@xver", prop_all[1]), ("service_trusteeship@xver", prop_all[2]), ("scale_takeover_pre@xver", prop_all[3])))
+        assert len(actions) == 32
+    else:
+        raise ValueError(f"Unsupported menu_mode: {design.menu_mode}")
+
     for act in actions:
         tot_c = sum(c for _, c in act)
         assert tot_c in (0, budget), f"Menu budget sum mismatch: {tot_c} vs {budget}"
@@ -227,6 +257,9 @@ class RegionalSubEconomy:
         self.last_subsidized_operator: dict[str, str] = {}
 
         init_g_mu = fsum(p.area for p in self.parcels if p.initial_crop == "grain")
+        init_svc = model.design.service_capacity_init if hasattr(model, "design") else 0.10
+        self.service_capacity_idx: float = init_svc
+        self.perf_factor: float = 1.0
         self.observed: dict[str, float] = {
             "grain_kg": cal.initial_grain_kg,
             "grain_phys_mu": init_g_mu,
@@ -236,10 +269,30 @@ class RegionalSubEconomy:
             "leased_rate": 0.0,
             "tight_liquidity_share": 0.25,
             "fiscal_exec_rate": 1.0,
+            "service_capacity_idx": init_svc,
+            "detected_violation_rate": 0.0,
+            "last_unit_rent": cal.tech.ask_rent_yuan_phys_mu,
         }
         self.last_parcel_rents: dict[str, tuple[float, float]] = {}
         self.last_parcel_rows: list[dict] = []
         self.last_actor_rows: list[dict] = []
+
+    def public_feature_list(self, design: V2Design) -> list[float]:
+        obs = self.observed
+        if design.menu_mode == "v2_25":
+            return [
+                float(obs["grain_cult_rate"]),
+                float(obs["idle_rate"]),
+                float(obs["unabsorbed_rate"]),
+                float(obs["leased_rate"]),
+                float(obs["tight_liquidity_share"]),
+            ]
+        # Well-conditioned 13-dim public state (1 + 4 * 3) avoiding P > N collinearity in FQI
+        return [
+            float(obs["grain_cult_rate"]),
+            float(obs.get("service_capacity_idx", self.service_capacity_idx)),
+            float(obs.get("detected_violation_rate", 0.0)) + 0.5 * float(obs["tight_liquidity_share"]),
+        ]
 
     def clone_into(self, new_model: "AgriSuccessionMesaModel") -> "RegionalSubEconomy":
         other = RegionalSubEconomy.__new__(RegionalSubEconomy)
@@ -260,6 +313,8 @@ class RegionalSubEconomy:
         other.last_was_idle = self.last_was_idle.copy()
         other.ever_subsidized_parcels = set(self.ever_subsidized_parcels)
         other.last_subsidized_operator = self.last_subsidized_operator.copy()
+        other.service_capacity_idx = self.service_capacity_idx
+        other.perf_factor = self.perf_factor
         other.observed = self.observed.copy()
         other.last_parcel_rents = self.last_parcel_rents.copy()
         other.last_parcel_rows = []
@@ -268,7 +323,24 @@ class RegionalSubEconomy:
 
     def build_schedule(self, instrument: str, budget_cap: float, design: V2Design) -> SubsidySchedule:
         thresh = design.scale_threshold_for(self.name)
-        if instrument == "none" or budget_cap <= 0.0:
+        use_xver = design.cross_verify_enabled or instrument.endswith("@xver")
+        clean_inst = instrument.removesuffix("@xver")
+        svc_mat = self.service_capacity_idx if design.enable_service_capacity_accumulation else 0.0
+        v_sav = design.village_contiguous_mach_saving if design.enable_village_coordination else 0.0
+        g_cov = design.village_grain_covenant_floor if design.enable_village_coordination else 0.0
+        p_det = (
+            design.cross_verify_accuracy
+            if use_xver
+            else (design.base_audit_rate * design.local_audit_accuracy)
+        ) if design.enable_asymmetric_info_and_verification else 1.0
+
+        eff_cap = (
+            budget_cap * (1.0 - design.audit_admin_cost_share)
+            if (instrument.endswith("@xver") and design.enable_asymmetric_info_and_verification and budget_cap > 0.0)
+            else budget_cap
+        )
+
+        if clean_inst == "none" or eff_cap <= 0.0:
             return SubsidySchedule(
                 instrument="none",
                 rate_per_phys_mu=0.0,
@@ -276,29 +348,45 @@ class RegionalSubEconomy:
                 single_operator_cap_mu=design.single_operator_subsidy_cap_mu,
                 enable_single_operator_cap=design.enable_single_operator_cap,
                 service_discount_share=0.0,
+                order_price_bonus_yuan_kg=0.0,
+                service_maturity_idx=svc_mat,
+                village_pooled_saving=v_sav,
+                grain_covenant_floor=g_cov,
+                effective_detect_prob=p_det,
             )
-        if instrument.startswith("producer_"):
+        order_bonus = 0.0
+        if clean_inst.startswith("producer_"):
             elig_pool = max(1.0, self.land_mu * max(0.58, self.tech.baseline_grain_share))
-            rate = min(design.producer_cap_yuan_per_mu, budget_cap / elig_pool)
+            rate = min(design.producer_cap_yuan_per_mu, eff_cap / elig_pool)
             disc = 0.0
-        elif instrument.startswith("scale_takeover_"):
+        elif clean_inst.startswith("scale_takeover_"):
             elig_pool = max(1.0, self.land_mu * max(0.22, self.tech.scale_pool_share))
-            rate = min(design.scale_takeover_cap_yuan_per_mu, budget_cap / elig_pool)
+            rate = min(design.scale_takeover_cap_yuan_per_mu, eff_cap / elig_pool)
             disc = 0.0
-        elif instrument == "service_trusteeship":
+        elif clean_inst == "service_trusteeship":
             elig_pool = max(1.0, self.land_mu * max(0.55, self.tech.baseline_grain_share))
-            rate = min(design.service_cap_yuan_per_mu, budget_cap / elig_pool)
+            rate = min(design.service_cap_yuan_per_mu, eff_cap / elig_pool)
             disc = design.service_discount_share
+        elif clean_inst == "order_farming":
+            elig_pool = max(1.0, self.land_mu * max(0.55, self.tech.baseline_grain_share))
+            rate = min(design.order_cap_yuan_per_mu, eff_cap / elig_pool)
+            disc = 0.0
+            order_bonus = design.order_max_price_bonus_ratio * self.tech.grain_price_yuan_kg
         else:
             raise ValueError(f"Unsupported policy instrument: {instrument}")
 
         return SubsidySchedule(
-            instrument=instrument,
+            instrument=clean_inst,
             rate_per_phys_mu=rate,
             scale_threshold_mu=thresh,
             single_operator_cap_mu=design.single_operator_subsidy_cap_mu,
             enable_single_operator_cap=design.enable_single_operator_cap,
             service_discount_share=disc,
+            order_price_bonus_yuan_kg=order_bonus,
+            service_maturity_idx=svc_mat,
+            village_pooled_saving=v_sav,
+            grain_covenant_floor=g_cov,
+            effective_detect_prob=p_det,
         )
 
     def step_region(
@@ -336,8 +424,14 @@ class RegionalSubEconomy:
 
         for aid in actor_ids:
             op = self.operators[aid]
+            op.current_year_num = year
             op.current_opp_wage = op.bp.offfarm_wage_day * drift * wage_shock[aid]
-            op.current_fam_labor = op.bp.ag_days_year * labor_shock[aid]
+            age_decay = (
+                (1.0 - design.elderly_labor_decay_rate) ** max(0.0, (op.bp.head_age_2010 + year) - 58.0)
+                if (design.enable_household_aging_and_exit_inertia and op.is_survey_household)
+                else 1.0
+            )
+            op.current_fam_labor = op.bp.ag_days_year * age_decay * labor_shock[aid]
             # Background fertility cash enters household spring liquidity via "One-Card" transfer
             op.current_wc_open = max(0.0, op.working_cap * wc_shock[aid] + fertility_received[aid])
 
@@ -397,7 +491,17 @@ class RegionalSubEconomy:
 
             retained_pids: set[str] = set()
             released_pids = set()
-            expected_rent_mu = self.tech.ask_rent_yuan_phys_mu * (1.0 - design.search_friction_prob)
+            eff_friction = design.search_friction_prob * (
+                design.village_friction_mult if design.enable_village_coordination else 1.0
+            )
+            eff_setup_fee = design.contract_setup_fee_yuan * (
+                design.village_setup_fee_mult if design.enable_village_coordination else 1.0
+            )
+            if design.dynamic_expected_rent_update and self.observed.get("last_unit_rent", 0.0) > 10.0:
+                base_exp_rent = 0.55 * self.tech.ask_rent_yuan_phys_mu + 0.45 * float(self.observed["last_unit_rent"])
+            else:
+                base_exp_rent = self.tech.ask_rent_yuan_phys_mu
+            expected_rent_mu = base_exp_rent * (1.0 - eff_friction)
             # Anti-abandonment rule increases willingness to lease out rather than leave idle
             if design.enable_background_fertility_subsidy and design.fertility_anti_abandonment_rule:
                 expected_rent_mu += 0.35 * self.tech.fertility_base_yuan_phys_mu
@@ -411,12 +515,20 @@ class RegionalSubEconomy:
                 own_nontrad = [p for p in own_free_by_hh[aid] if not p.tradable]
                 nontrad_mu = fsum(p.area for p in own_nontrad)
 
-                keep_list, rel_list, _ = hh.decide_land_retention(
+                keep_list, rel_list, chosen_plan = hh.decide_land_retention(
                     held_mu, held_new_tk, own_trad, nontrad_mu,
                     expected_rent_mu, design, sched_init, wc_after_held[aid],
                 )
-                for p in own_nontrad:
-                    retained_pids.add(p.id)
+                if (
+                    design.allow_exit_entrust_nontrad
+                    and len(keep_list) == 0
+                    and chosen_plan.planted_physical_mu <= 1e-6
+                ):
+                    for p in own_nontrad:
+                        released_pids.add(p.id)
+                else:
+                    for p in own_nontrad:
+                        retained_pids.add(p.id)
                 for p in keep_list:
                     retained_pids.add(p.id)
                 for p in rel_list:
@@ -466,23 +578,25 @@ class RegionalSubEconomy:
 
                 ordered_plots = sorted(plist, key=lambda p: (-p.area, p.id))
                 for p in ordered_plots:
-                    if search_draw[p.id] < design.search_friction_prob:
+                    if search_draw[p.id] < eff_friction:
                         unmatched_pids.add(p.id)
                         continue
                     ask_mu = self.tech.ask_rent_yuan_phys_mu * p.quality
                     area_key = round(p.area, 4)
+                    grp_id_eff = f"VPOOL_{sm}" if design.enable_village_coordination else p.offer_group_id
                     valid_bids: list[tuple[float, str]] = []
 
                     for b_id in cands:
                         if b_id == p.owner or b_id in releasing_owners or b_id not in base_plan_cache:
                             continue
-                        is_new_grp = p.offer_group_id not in signed_groups_by_lessee[b_id]
+                        is_new_grp = grp_id_eff not in signed_groups_by_lessee[b_id]
                         ckey = (b_id, area_key, is_new_grp)
                         if ckey not in bid_cache:
                             bid_cache[ckey] = self.operators[b_id].evaluate_land_bid(
                                 cur_mu[b_id], cur_tk_mu[b_id], p.area, is_new_grp,
                                 design, sched_init, wc_rem[b_id],
                                 base_plan=base_plan_cache[b_id],
+                                setup_fee_override=eff_setup_fee,
                             )
                         b_val = bid_cache[ckey]
                         if b_val + 1e-7 >= ask_mu:
@@ -503,8 +617,8 @@ class RegionalSubEconomy:
                         clear_mu = 0.5 * (win_bid_mu + max(ask_mu, second_bid_mu if len(valid_bids) >= 2 else ask_mu))
 
                     rent_y = clear_mu * p.area
-                    is_new_grp = p.offer_group_id not in signed_groups_by_lessee[winner]
-                    fee_y = design.contract_setup_fee_yuan if is_new_grp else 0.0
+                    is_new_grp = grp_id_eff not in signed_groups_by_lessee[winner]
+                    fee_y = eff_setup_fee if is_new_grp else 0.0
 
                     if wc_rem[winner] + 1e-7 < rent_y + fee_y:
                         unmatched_pids.add(p.id)
@@ -517,11 +631,12 @@ class RegionalSubEconomy:
                     cur_mu[winner] += p.area
                     if self.last_operator[p.id] != winner:
                         cur_tk_mu[winner] += p.area
-                    signed_groups_by_lessee[winner].add(p.offer_group_id)
+                    signed_groups_by_lessee[winner].add(grp_id_eff)
 
+                    lease_yrs = design.lease_years_for_category(self.operators[winner].actor_category)
                     new_contracts[p.id] = LeaseContractV2(
                         parcel_id=p.id,
-                        offer_group_id=p.offer_group_id,
+                        offer_group_id=grp_id_eff,
                         lessor=p.owner,
                         lessee=winner,
                         rent_yuan=rent_y,
@@ -530,7 +645,7 @@ class RegionalSubEconomy:
                         runner_up_bid_per_mu=second_bid_mu,
                         ask_per_mu=ask_mu,
                         start_year=year,
-                        end_year=year + max(1, design.lease_duration_years) - 1,
+                        end_year=year + max(1, lease_yrs) - 1,
                     )
 
                     # Immediately invalidate cached bids for winner and recompute post-win state (RegMAS rule!)
@@ -648,29 +763,44 @@ class RegionalSubEconomy:
 
         sched_eff = sched_init
         plans: dict[str, PMPPlanV2] = {}
+        clean_inst = instrument.removesuffix("@xver")
+        use_xver = design.cross_verify_enabled or instrument.endswith("@xver")
+        verif_admin_cost = (
+            budget_cap * design.audit_admin_cost_share
+            if (instrument.endswith("@xver") and design.enable_asymmetric_info_and_verification and budget_cap > 0.0 and clean_inst != "none")
+            else 0.0
+        )
+        sub_budget_cap = max(0.0, budget_cap - verif_admin_cost)
+
+        def _claim_for_plan(pl: PMPPlanV2, sc: SubsidySchedule) -> float:
+            if sc.instrument == "service_trusteeship":
+                return pl.service_subsidy_yuan
+            if sc.instrument == "order_farming":
+                return pl.order_subsidy_yuan
+            if sc.instrument != "none":
+                return pl.pre_cash_subsidy_yuan + pl.post_cash_subsidy_yuan + pl.opportunistic_overclaim_yuan
+            return 0.0
 
         def solve_all_operators(sc: SubsidySchedule) -> tuple[dict[str, PMPPlanV2], float]:
             pl_map: dict[str, PMPPlanV2] = {}
             tot_claim = 0.0
             for aid in actor_ids:
                 pl = self.operators[aid].evaluate_production(
-                    op_phys_mu[aid], op_new_tk_mu[aid], design, sc, wc_after_mkt[aid]
+                    op_phys_mu[aid], op_new_tk_mu[aid], design, sc, wc_after_mkt[aid],
+                    rent_offset_yuan=rent_income[aid],
                 )
                 pl_map[aid] = pl
-                if sc.instrument == "service_trusteeship":
-                    tot_claim += pl.service_subsidy_yuan
-                elif sc.instrument != "none":
-                    tot_claim += pl.pre_cash_subsidy_yuan + pl.post_cash_subsidy_yuan
+                tot_claim += _claim_for_plan(pl, sc)
             return pl_map, tot_claim
 
         plans, raw_claim_total = solve_all_operators(sched_eff)
 
-        # Fixed-point proportional rate scaling if total claims exceed regional budget_cap
-        if sched_eff.instrument != "none" and raw_claim_total > budget_cap + 1e-7:
-            for _ in range(4):
-                if raw_claim_total <= budget_cap + 1e-7:
+        # Fixed-point proportional rate scaling if total claims exceed sub_budget_cap
+        if sched_eff.instrument != "none" and raw_claim_total > sub_budget_cap + 1e-7:
+            for _ in range(5):
+                if raw_claim_total <= sub_budget_cap + 1e-7:
                     break
-                scale_f = max(0.0, (budget_cap / raw_claim_total) * 0.999999)
+                scale_f = max(0.0, (sub_budget_cap / raw_claim_total) * 0.999999)
                 sched_eff = SubsidySchedule(
                     instrument=sched_eff.instrument,
                     rate_per_phys_mu=sched_eff.rate_per_phys_mu * scale_f,
@@ -680,25 +810,74 @@ class RegionalSubEconomy:
                     service_discount_share=sched_eff.service_discount_share * (
                         scale_f if sched_eff.instrument == "service_trusteeship" else 1.0
                     ),
+                    order_price_bonus_yuan_kg=sched_eff.order_price_bonus_yuan_kg * (
+                        scale_f if sched_eff.instrument == "order_farming" else 1.0
+                    ),
+                    service_maturity_idx=sched_eff.service_maturity_idx,
+                    village_pooled_saving=sched_eff.village_pooled_saving,
+                    grain_covenant_floor=sched_eff.grain_covenant_floor,
+                    effective_detect_prob=sched_eff.effective_detect_prob,
                 )
                 plans, raw_claim_total = solve_all_operators(sched_eff)
 
-        # 5. Harvest realization, 6-Category Parcel Transition Ledger & Subsistence/Cash Settlement
-        committed_yuan = min(budget_cap, raw_claim_total) if sched_eff.instrument != "none" else 0.0
-        actual_incremental_spending = 0.0
+        # 5. Harvest realization, Verification/Audit, 6-Category Parcel Transition Ledger & Settlement
+        if design.enable_asymmetric_info_and_verification:
+            sig_env = design.idiosyncratic_env_noise_sd * (design.disaster_noise_amp if weather_mult < 1.0 else 1.0)
+            raw_z = rng(16).normal(0.0, sig_env, len(self.parcels))
+            p_env_map = dict(zip((p.id for p in self.parcels), np.exp(raw_z - 0.5 * sig_env * sig_env)))
+            real_p_det = (
+                design.cross_verify_accuracy * (0.92 if weather_mult < 1.0 else 1.0)
+                if use_xver
+                else (design.base_audit_rate * design.local_audit_accuracy * (0.55 if weather_mult < 1.0 else 1.0))
+            )
+            audit_draws = dict(zip(actor_ids, rng(17).random(len(actor_ids))))
+        else:
+            p_env_map = {p.id: 1.0 for p in self.parcels}
+            real_p_det = 1.0
+            audit_draws = {aid: 1.0 for aid in actor_ids}
+
+        committed_yuan = (
+            min(budget_cap, raw_claim_total + verif_admin_cost)
+            if (sched_eff.instrument != "none" or verif_admin_cost > 0.0)
+            else 0.0
+        )
+        actual_incremental_spending = verif_admin_cost
         support_by_actor: dict[str, float] = defaultdict(float)
+        fines_by_actor: dict[str, float] = defaultdict(float)
+        ineligible_overclaim_net = 0.0
+        opportunistic_subsidy_yuan = 0.0
+        n_claimants = 0
+        n_detected_violators = 0
 
         for aid, pl in plans.items():
-            if sched_eff.instrument == "service_trusteeship":
-                sup = pl.service_subsidy_yuan
-            elif sched_eff.instrument != "none":
-                sup = pl.pre_cash_subsidy_yuan + pl.post_cash_subsidy_yuan
+            op_ag = self.operators[aid]
+            gross_claim = _claim_for_plan(pl, sched_eff)
+            if gross_claim > 1e-3:
+                n_claimants += 1
+            if design.enable_asymmetric_info_and_verification and gross_claim > 1e-6:
+                has_viol = (pl.opportunistic_overclaim_yuan > 1e-3) or (pl.effort_shading_rate > 0.02)
+                is_det = has_viol and (audit_draws[aid] < real_p_det)
+                if is_det:
+                    n_detected_violators += 1
+                    intercepted = min(gross_claim, pl.opportunistic_overclaim_yuan)
+                    sup = max(0.0, gross_claim - intercepted)
+                    fines_by_actor[aid] = min(
+                        0.40 * max(0.0, wc_after_mkt[aid]),
+                        design.clawback_fine_multiplier * (intercepted + 0.25 * gross_claim * pl.effort_shading_rate),
+                    )
+                else:
+                    sup = gross_claim
+                    ineligible_overclaim_net += pl.opportunistic_overclaim_yuan
+                op_ag.audit_belief = 0.65 * op_ag.audit_belief + 0.35 * (1.0 if is_det else real_p_det)
             else:
-                sup = 0.0
+                sup = gross_claim
+
             support_by_actor[aid] = sup
             actual_incremental_spending += sup
+            if op_ag.bp.is_opportunistic_type:
+                opportunistic_subsidy_yuan += sup
 
-        if actual_incremental_spending > budget_cap + 1e-5:
+        if actual_incremental_spending > budget_cap + 1e-4:
             raise AssertionError(f"Regional spending {actual_incremental_spending} breached cap {budget_cap}")
 
         # Parcel-level accounting & exact 6-fate decomposition
@@ -723,15 +902,30 @@ class RegionalSubEconomy:
 
         parcel_rows: list[dict] = []
         parcel_rents_now: dict[str, tuple[float, float]] = {}
+        parcel_harvest_by_op: dict[str, float] = defaultdict(float)
+        moral_hazard_grain_loss_kg = 0.0
+        opportunistic_leased_mu = 0.0
+        serviced_grain_phys_mu = 0.0
+        svc_yield_mult = (
+            (1.0 + design.service_maturity_yield_gain_max * sched_eff.service_maturity_idx)
+            if design.enable_service_capacity_accumulation
+            else 1.0
+        )
         next_last_op: dict[str, str] = {}
         next_was_grain: dict[str, bool] = {}
         next_was_idle: dict[str, bool] = {}
+
+        op_parcel_phys_sum: dict[str, float] = {
+            aid: fsum(q.area for q in parcels_by_op[aid]) for aid in actor_ids
+        }
 
         for p in self.parcels:
             is_leased = p.id in active_contracts
             rent_y = active_contracts[p.id].rent_yuan if is_leased else 0.0
             if is_leased:
                 parcel_rents_now[p.id] = (p.area, rent_y)
+                if self.operators[active_contracts[p.id].lessee].bp.is_opportunistic_type:
+                    opportunistic_leased_mu += p.area
 
             unmatched_idle = (p.id in unmatched_pids) and (p.id not in recovered_pids) and (not is_leased)
             op_id = assigned_op[p.id]
@@ -750,10 +944,24 @@ class RegionalSubEconomy:
                 g_sh = pl.grain_share
                 op_op = self.operators[op_id]
                 sown_g_p = p.area * pl_frac * g_sh * op_op.bp.mci
-                h_kg = sown_g_p * op_op.bp.grain_yield_kg_sown_mu * p.quality * weather_mult
-                # Allocate operator's realized incremental support proportionally across grain physical area
-                op_g_phys = max(1e-9, pl.planted_physical_mu * pl.grain_share)
-                sup_p = support_by_actor[op_id] * ((p.area * pl_frac * g_sh) / op_g_phys) if g_sh > 1e-9 and pl_frac > 1e-9 else 0.0
+                mh_drag = 1.0 - 0.52 * pl.effort_shading_rate
+                if design.enable_asymmetric_info_and_verification and sched_eff.instrument == "service_trusteeship" and sched_eff.effective_detect_prob < 0.65:
+                    mh_drag *= (1.0 - 0.055 * (0.65 - sched_eff.effective_detect_prob))
+                h_kg_clean = sown_g_p * op_op.bp.grain_yield_kg_sown_mu * svc_yield_mult * p.quality * weather_mult * p_env_map[p.id]
+                h_kg = h_kg_clean * max(0.60, mh_drag)
+                moral_hazard_grain_loss_kg += max(0.0, h_kg_clean - h_kg)
+                parcel_harvest_by_op[op_id] += h_kg
+                if pl.service_subsidy_yuan > 1e-6:
+                    serviced_grain_phys_mu += p.area * pl_frac * g_sh
+                # Allocate operator's realized incremental support proportionally across operated/grain parcels
+                if ext_inflow_mu[op_id] == 0.0 and op_parcel_phys_sum[op_id] > 1e-9:
+                    if g_sh > 1e-9 and pl_frac > 1e-9:
+                        sup_p = support_by_actor[op_id] * (p.area / op_parcel_phys_sum[op_id])
+                    else:
+                        sup_p = support_by_actor[op_id] * (p.area / op_parcel_phys_sum[op_id])
+                else:
+                    op_g_phys = max(1e-9, pl.planted_physical_mu * pl.grain_share)
+                    sup_p = support_by_actor[op_id] * ((p.area * pl_frac * g_sh) / op_g_phys) if g_sh > 1e-9 and pl_frac > 1e-9 else 0.0
 
             g_phys = p.area * pl_frac * g_sh
             c_phys = p.area * pl_frac * (1.0 - g_sh)
@@ -835,8 +1043,9 @@ class RegionalSubEconomy:
                 pl = plans[aid]
                 pl_f = min(1.0, pl.planted_physical_mu / op_phys_mu[aid])
                 op_op = self.operators[aid]
+                mh_d = 1.0 - 0.52 * pl.effort_shading_rate
                 ext_grain_kg_by_actor[aid] = (
-                    ex_mu * pl_f * pl.grain_share * op_op.bp.mci * op_op.bp.grain_yield_kg_sown_mu * weather_mult
+                    ex_mu * pl_f * pl.grain_share * op_op.bp.mci * op_op.bp.grain_yield_kg_sown_mu * svc_yield_mult * max(0.60, mh_d) * weather_mult
                 )
 
         # 6. Operator-level Harvest Income, Subsistence Split, Working-Capital Carry-over & Viability
@@ -859,13 +1068,9 @@ class RegionalSubEconomy:
             pl = plans[aid]
             sup_inc = support_by_actor[aid]
             fert_inc = fertility_received[aid]
+            fine_paid = fines_by_actor[aid]
 
-            realized_grain_kg = pl.expected_grain_kg * weather_mult if ext_inflow_mu[aid] == 0 else (
-                fsum(
-                    (p.area * min(1.0, pl.planted_physical_mu / op_phys_mu[aid]) * pl.grain_share * op.bp.mci * op.bp.grain_yield_kg_sown_mu * p.quality * weather_mult)
-                    for p in parcels_by_op[aid]
-                ) + ext_grain_kg_by_actor[aid]
-            )
+            realized_grain_kg = parcel_harvest_by_op[aid] + ext_grain_kg_by_actor[aid]
             realized_cash_crop_rev = pl.expected_cash_rev_yuan * weather_mult
 
             # Named grain crop realization
@@ -906,7 +1111,9 @@ class RegionalSubEconomy:
             wage_earned = max(0.0, op.bp.offfarm_annual_base * drift * wage_shock[aid] - op.current_opp_wage * comp_used)
 
             pre_cash_sub_realized = sup_inc if sched_eff.instrument.endswith("_pre") else 0.0
-            post_cash_sub_realized = sup_inc if sched_eff.instrument.endswith("_post") else 0.0
+            post_cash_sub_realized = (
+                sup_inc if sched_eff.instrument in ("producer_post", "scale_takeover_post", "order_farming") else 0.0
+            )
 
             upfront_prod_outlay = max(
                 0.0,
@@ -924,10 +1131,11 @@ class RegionalSubEconomy:
                 + wage_earned
                 - autumn_hired_rem
                 - op.bp.admin_overhead_yuan
+                - fine_paid
             )
             net_cash_after_living = autumn_cash_inflow - cash_living_spend
 
-            # Full economic net income (including in-kind staple consumption value + net rent + subsidies)
+            # Full economic net income (including in-kind staple consumption value + net rent + subsidies - fines)
             full_net_income = (
                 grain_cash_sales
                 + in_kind_sub_val
@@ -943,6 +1151,7 @@ class RegionalSubEconomy:
                 - pl.net_mach_service_yuan
                 - pl.hired_cost_yuan
                 - op.bp.admin_overhead_yuan
+                - fine_paid
             )
 
             # Recover spring working-capital principal, then allocate surplus into working_cap & wealth
@@ -965,6 +1174,7 @@ class RegionalSubEconomy:
 
             op.working_cap = wc_next
             op.wealth = wealth_next
+            op.was_cultivating = (pl.sown_grain_mu + pl.sown_cash_mu) > 1e-6
             if pl.planted_physical_mu > 1e-6:
                 op.ref_grain_share = 0.65 * op.ref_grain_share + 0.35 * pl.grain_share
 
@@ -1045,6 +1255,18 @@ class RegionalSubEconomy:
         )
         idi_score = 0.55 * cult_share + 0.45 * (1.0 - gini)
 
+        if design.enable_service_capacity_accumulation:
+            self.service_capacity_idx = min(
+                1.0,
+                max(
+                    0.0,
+                    (1.0 - design.service_capacity_depreciation) * self.service_capacity_idx
+                    + design.service_capacity_accum_rate * (serviced_grain_phys_mu / max(1.0, self.land_mu)),
+                ),
+            )
+        det_viol_rate = n_detected_violators / max(1, n_claimants)
+        prev_u_rent = self.observed.get("last_unit_rent", self.tech.ask_rent_yuan_phys_mu)
+
         self.observed = {
             "grain_kg": total_grain_kg / max(0.5, weather_mult),  # Weather-normalized structural grain capacity
             "grain_phys_mu": total_grain_phys_mu,
@@ -1054,7 +1276,17 @@ class RegionalSubEconomy:
             "leased_rate": leased_area_mu / max(1.0, self.land_mu),
             "tight_liquidity_share": tight_liq_count / max(1, len(actor_ids)),
             "fiscal_exec_rate": actual_incremental_spending / max(1.0, budget_cap) if budget_cap > 0 else 1.0,
+            "service_capacity_idx": self.service_capacity_idx,
+            "detected_violation_rate": det_viol_rate,
+            "last_unit_rent": unit_rent_mu if leased_area_mu > 1.0 else prev_u_rent,
         }
+        if design.enable_performance_budget_linkage:
+            perf_sig = (
+                1.2 * (self.observed["grain_cult_rate"] - self.tech.baseline_grain_share)
+                - 0.8 * self.observed["idle_rate"]
+                - 0.6 * det_viol_rate
+            )
+            self.perf_factor = float(np.clip(1.0 + perf_sig, 0.82, 1.18))
 
         reg_summary = {
             "year": year,
@@ -1064,6 +1296,14 @@ class RegionalSubEconomy:
             "announced_rate_mu": round(sched_eff.rate_per_phys_mu, 4),
             "committed": round(committed_yuan, 4),
             "spending": round(actual_incremental_spending, 4),
+            "verification_admin_cost_yuan": round(verif_admin_cost, 4),
+            "fines_clawed_back_yuan": round(fsum(fines_by_actor.values()), 4),
+            "ineligible_overclaim_net_yuan": round(ineligible_overclaim_net, 4),
+            "opportunistic_leased_mu": round(opportunistic_leased_mu, 4),
+            "opportunistic_subsidy_yuan": round(opportunistic_subsidy_yuan, 4),
+            "moral_hazard_grain_loss_kg": round(moral_hazard_grain_loss_kg, 4),
+            "service_capacity_idx": round(self.service_capacity_idx, 4),
+            "detected_violation_rate": round(det_viol_rate, 4),
             "background_fertility_yuan": round(fsum(fertility_received.values()), 4),
             "fertility_forfeited_mu": round(fertility_forfeited_mu, 4),
             "grain_kg": round(total_grain_kg, 4),
@@ -1151,7 +1391,11 @@ class RegionalSubEconomy:
             assert req(fsum(p["harvest_grain_kg"] for p in parcel_rows), s["grain_kg"])
             assert req(fsum(p["rent_yuan"] for p in parcel_rows), fsum(a["rent_paid"] for a in actor_rows))
             assert req(fsum(p["rent_yuan"] for p in parcel_rows), fsum(a["rent_income"] for a in actor_rows))
-            assert req(fsum(a["incremental_support_yuan"] for a in actor_rows), s["spending"])
+            assert req(fsum(p["incremental_support_yuan"] for p in parcel_rows), fsum(a["incremental_support_yuan"] for a in actor_rows))
+            assert req(
+                fsum(a["incremental_support_yuan"] for a in actor_rows) + s.get("verification_admin_cost_yuan", 0.0),
+                s["spending"],
+            )
 
 
 class AgriSuccessionMesaModel(mesa.Model):
@@ -1233,19 +1477,10 @@ class AgriSuccessionMesaModel(mesa.Model):
         return clone
 
     def extract_public_state_features(self) -> np.ndarray:
-        """21-dim lagged public feature vector (1 bias + 4 regions x 5 lagged macro indicators).
-        Contains ZERO household private cash, hidden skill, or future weather information!
-        """
+        """Lagged public macro feature vector (contains ZERO household private cash, hidden skill, or future weather)."""
         feats = [1.0]
         for r in self.regions:
-            obs = r.observed
-            feats.extend([
-                float(obs["grain_cult_rate"]),
-                float(obs["idle_rate"]),
-                float(obs["unabsorbed_rate"]),
-                float(obs["leased_rate"]),
-                float(obs["tight_liquidity_share"]),
-            ])
+            feats.extend(r.public_feature_list(self.design))
         return np.asarray(feats, dtype=np.float64)
 
     def select_transparent_rule_action(self) -> int:
@@ -1318,7 +1553,25 @@ class AgriSuccessionMesaModel(mesa.Model):
         reg_rows: list[dict] = []
         snaps: list[FixedContractSnapshot | None] = []
 
-        for i, (reg, (inst, cap)) in enumerate(zip(self.regions, joint_act, strict=True)):
+        # 财农〔2023〕11/12号: Annual budget clears at year-end (zero slush-fund hoarding), while next-year
+        # regional factor allocation adjusts within [0.82, 1.18] by prior-year verified performance when enabled.
+        tot_planned_budget = sum(int(c) for _, c in joint_act)
+        if self.design.enable_performance_budget_linkage and tot_planned_budget > 0 and self.year >= 2:
+            raw_w = [float(c) * reg.perf_factor for reg, (_, c) in zip(self.regions, joint_act, strict=True)]
+            w_sum = max(1e-9, fsum(raw_w))
+            scaled = [tot_planned_budget * (x / w_sum) for x in raw_w]
+            fl_caps = [floor(x) for x in scaled]
+            rem = tot_planned_budget - sum(fl_caps)
+            for idx_r in sorted(range(len(fl_caps)), key=lambda k: (-(scaled[k] - fl_caps[k]), k))[:rem]:
+                fl_caps[idx_r] += 1
+            eff_joint_act: JointActionV2 = tuple(
+                (joint_act[i][0], fl_caps[i]) if joint_act[i][0] != "none" and fl_caps[i] > 0 else OFF_LOCAL
+                for i in range(len(self.regions))
+            )
+        else:
+            eff_joint_act = joint_act
+
+        for i, (reg, (inst, cap)) in enumerate(zip(self.regions, eff_joint_act, strict=True)):
             f_ref = fixed_contract_refs[i] if fixed_contract_refs is not None else None
             r_sum, snap = reg.step_region(
                 self.year,
@@ -1350,6 +1603,14 @@ class AgriSuccessionMesaModel(mesa.Model):
             "reservation": round(tot_res, 4),
             "committed": round(tot_comm, 4),
             "spending": round(tot_spend, 4),
+            "verification_admin_cost_yuan": round(fsum(r["verification_admin_cost_yuan"] for r in reg_rows), 4),
+            "fines_clawed_back_yuan": round(fsum(r["fines_clawed_back_yuan"] for r in reg_rows), 4),
+            "ineligible_overclaim_net_yuan": round(fsum(r["ineligible_overclaim_net_yuan"] for r in reg_rows), 4),
+            "opportunistic_leased_mu": round(fsum(r["opportunistic_leased_mu"] for r in reg_rows), 4),
+            "opportunistic_subsidy_yuan": round(fsum(r["opportunistic_subsidy_yuan"] for r in reg_rows), 4),
+            "moral_hazard_grain_loss_kg": round(fsum(r["moral_hazard_grain_loss_kg"] for r in reg_rows), 4),
+            "service_capacity_idx": round(fsum(r["service_capacity_idx"] * r["physical_area_mu"] for r in reg_rows) / tot_phys, 4),
+            "detected_violation_rate": round(fsum(r["detected_violation_rate"] * r["physical_area_mu"] for r in reg_rows) / tot_phys, 4),
             "background_fertility_yuan": round(fsum(r["background_fertility_yuan"] for r in reg_rows), 4),
             "fertility_forfeited_mu": round(fsum(r["fertility_forfeited_mu"] for r in reg_rows), 4),
             "grain_kg": round(fsum(r["grain_kg"] for r in reg_rows), 4),

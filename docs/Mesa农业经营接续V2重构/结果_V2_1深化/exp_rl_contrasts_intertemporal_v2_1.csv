@@ -1,0 +1,6 @@
+env_tag,contrast,grain_8yr_diff_tons,grain_ci95,spending_8yr_diff_wan,spending_ci95,withdrawal_diff_tons,withdrawal_ci95
+intertemporal_v2_1,gov_rl_minus_p0,1345.375,"[1323.11, 1367.64]",111.551,"[111.169, 111.933]",378.877,"[357.83, 399.92]"
+intertemporal_v2_1,gov_rl_minus_uniform_fixed,-90.288,"[-110.65, -69.93]",52.446,"[52.058, 52.835]",-72.896,"[-94.06, -51.74]"
+intertemporal_v2_1,gov_rl_minus_regional_fixed,-117.255,"[-136.23, -98.28]",18.579,"[18.183, 18.974]",-50.086,"[-70.76, -29.41]"
+intertemporal_v2_1,gov_rl_minus_transparent_rule,779.163,"[756.22, 802.10]",15.883,"[15.422, 16.344]",186.952,"[165.97, 207.93]"
+intertemporal_v2_1,gov_rl_minus_myopic,822.964,"[798.46, 847.47]",-2.796,"[-3.479, -2.113]",262.412,"[242.84, 281.98]"

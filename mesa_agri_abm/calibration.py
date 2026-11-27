@@ -97,6 +97,12 @@ class ActorBlueprint:
     verified_tradable_mu: float
     admin_overhead_yuan: float
     service_coord_saving: float
+    head_age_2010: float = 53.0
+    elderly_share_2010: float = 0.0
+    migrant_days_2010: float = 0.0
+    offfarm_income_share_2010: float = 0.0
+    is_opportunistic_type: bool = False
+    compliance_propensity: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,7 +236,7 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
         "year", "hhid", "id", "smgen", "hhnumbers", "hhlabornum",
         "area_b", "area_e", "area_e1", "area_in1", "area_de2",
         "sow_total", "sow_food", "prod_food", "sow_cash",
-        "inc_wage_l", "inc_wage_o", "saving_1", "saving_2", "inc_rent",
+        "inc_wage_l", "inc_wage_o", "inc_total", "saving_1", "saving_2", "inc_rent",
         "inc_govern_3", "inc_govern_4", "inc_govern_5", "foodc", "foodcbuy",
     ]
     crop_cols = [
@@ -279,6 +285,40 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
     df10_lab = df0910.loc[df0910["year"].eq(2010), ["region", "hhnumbers", "hhlabornum"]]
     valid_lab = df10_lab["hhlabornum"].between(0, df10_lab["hhnumbers"]) & df10_lab["hhlabornum"].mod(1).eq(0)
     worker_proxy = df10_lab.loc[valid_lab].groupby(["region", "hhnumbers"])["hhlabornum"].quantile(0.5, interpolation="lower")
+
+    ind_lookup: dict[tuple[int, str], tuple[float, float, float]] = {}
+    if design.enable_household_aging_and_exit_inertia:
+        ind_path = nfps_dir / "2009-2015individual.csv"
+        ind_raw = pd.read_csv(
+            ind_path,
+            usecols=["year", "hhid", "smgen", "age", "head", "timeout"],
+            dtype={"hhid": "string"},
+            low_memory=False,
+        )
+        ind10 = ind_raw.loc[ind_raw["year"].eq(2010)].copy()
+        del ind_raw
+        assert int(ind10["year"].max()) <= 2010, "Post-2010 individual data leakage strictly forbidden"
+        ind10["hhid_c"] = ind10["hhid"].str.strip()
+        ind10["v_age"] = ind10["age"].where(ind10["age"].between(16, 100), np.nan)
+        ind10["h_age"] = ind10["v_age"].where(ind10["head"].eq(1), np.nan)
+        ind10["tout"] = ind10["timeout"].fillna(0.0).clip(0.0, 330.0)
+        ind10["is_ad"] = ind10["v_age"].notna()
+        ind10["is_el"] = ind10["v_age"] >= 60
+        ind_agg = ind10.groupby(["smgen", "hhid_c"]).agg(
+            head_age=("h_age", "max"),
+            max_age=("v_age", "max"),
+            n_ad=("is_ad", "sum"),
+            n_el=("is_el", "sum"),
+            tout_sum=("tout", "sum"),
+        ).reset_index()
+        for r_i in ind_agg.itertuples():
+            ha = (
+                float(r_i.head_age)
+                if pd.notna(r_i.head_age)
+                else (float(r_i.max_age) if pd.notna(r_i.max_age) else 54.0)
+            )
+            es = float(r_i.n_el / max(1, r_i.n_ad))
+            ind_lookup[(int(r_i.smgen), str(r_i.hhid_c))] = (ha, min(1.0, max(0.0, es)), float(r_i.tout_sum))
 
     prov_counts = b.groupby("smgen").size().to_dict()
     reg_thin_code = {"东部": 901, "中部": 902, "西部": 903, "东北": 904}
@@ -421,8 +461,24 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                 ag_days_per_worker = 160.0
                 slack_share = 0.82
 
-            tot_ag_days = max(15.0, n_work * ag_days_per_worker) * design.family_labor_scale
-            slack_days = tot_ag_days * slack_share
+            off_inc_tot = max(0.0, float(obs.inc_wage_l or 0.0) if pd.notna(obs.inc_wage_l) else 0.0) + max(
+                0.0, float(obs.inc_wage_o or 0.0) if pd.notna(obs.inc_wage_o) else 0.0
+            )
+            inc_tot_2010 = max(1_000.0, float(obs.inc_total) if pd.notna(obs.inc_total) else 1_000.0)
+            off_inc_sh = float(np.clip(off_inc_tot / inc_tot_2010, 0.0, 1.0))
+
+            if design.enable_household_aging_and_exit_inertia:
+                head_age_10, elder_sh_10, mig_days_10 = ind_lookup.get(
+                    (int(row.smgen), str(obs.hhid).strip()), (54.0, 0.0, 0.0)
+                )
+                res_workers = max(0.25, n_work - 0.55 * (mig_days_10 / 280.0))
+                tot_ag_days = max(15.0, res_workers * ag_days_per_worker) * design.family_labor_scale
+                eff_slack_sh = max(0.45, slack_share * (1.0 - 0.22 * off_inc_sh))
+                slack_days = tot_ag_days * eff_slack_sh
+            else:
+                head_age_10, elder_sh_10, mig_days_10 = 53.0, 0.0, 0.0
+                tot_ag_days = max(15.0, n_work * ag_days_per_worker) * design.family_labor_scale
+                slack_days = tot_ag_days * slack_share
 
             wage_yr = float(row.wage_income)
             offfarm_days_implied = max(30.0, n_work * (310.0 - ag_days_per_worker))
@@ -521,7 +577,20 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                     verified_tradable_mu=round(float(row.verified_right), 4),
                     admin_overhead_yuan=0.0,
                     service_coord_saving=0.0,
+                    head_age_2010=round(head_age_10, 2),
+                    elderly_share_2010=round(elder_sh_10, 4),
+                    migrant_days_2010=round(mig_days_10, 2),
+                    offfarm_income_share_2010=round(off_inc_sh, 4),
+                    is_opportunistic_type=False,
+                    compliance_propensity=round(0.50 + 0.45 * ((row.Index * 7) % 11) / 10.0, 3)
+                    if design.enable_asymmetric_info_and_verification
+                    else 1.0,
                 )
+            )
+            p_qual = (
+                (0.85, 0.95, 1.05, 1.15)[row.Index % 4]
+                if design.enable_asymmetric_info_and_verification
+                else 1.0
             )
             parcel_list.extend(
                 _split_parcels_v2(
@@ -534,7 +603,7 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                     sow_food=float(row.sow_food),
                     sow_cash=float(row.sow_cash),
                     sow_total=float(row.sow_total),
-                    quality=1.0,
+                    quality=p_qual,
                     start_idx=len(parcel_list),
                 )
             )
@@ -655,6 +724,47 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                             verified_tradable_mu=0.0,
                             admin_overhead_yuan=design.company_admin_overhead_yuan,
                             service_coord_saving=0.08,
+                            is_opportunistic_type=False,
+                            compliance_propensity=0.88 if design.enable_asymmetric_info_and_verification else 1.0,
+                        )
+                    )
+
+                # 4) Speculative/Opportunistic Scale Bidder when Asymmetric Information module is active
+                #    Lower true grain capability (0.82 * y_reg) + low signal fabrication cost ("垒大户套补/非粮化套利")
+                if design.enable_asymmetric_info_and_verification and sm_trad_mu >= 60.0:
+                    org_list.append(
+                        ActorBlueprint(
+                            id=f"SPEC_{reg_idx}_{sm}_{0}",
+                            region=reg_name,
+                            province=prov_rep,
+                            submarket=sm,
+                            actor_category="family_farm",
+                            is_survey_household=False,
+                            hh_members=2.0,
+                            workers=1.0,
+                            ag_days_year=180.0 * design.family_labor_scale,
+                            slack_ag_days_year=120.0 * design.family_labor_scale,
+                            offfarm_wage_day=round(0.50 * w_hire, 2),
+                            offfarm_annual_base=0.0,
+                            savings_stock=round(2.8 * wc_p85, 2),
+                            working_capital_init=round(2.5 * wc_p85 * design.working_cap_scale, 2),
+                            consumption_cash_base=10_000.0,
+                            subsistence_grain_kg=0.0,
+                            mci=round(mci_org, 3),
+                            grain_weights=w_tup,
+                            grain_yield_kg_sown_mu=round(0.82 * y_reg, 3),
+                            grain_price_yuan_kg=round(p_reg, 4),
+                            grain_non_mach_yuan_sown_mu=round(c_non_mach_reg, 2),
+                            grain_mach_yuan_sown_mu=round(c_mach_reg, 2),
+                            grain_labor_days_sown_mu=round(l_grain_reg, 2),
+                            ref_grain_share=round(max(0.38, 0.58 * base_g_share), 4),
+                            initial_cultivating=True,
+                            own_physical_mu=0.0,
+                            verified_tradable_mu=0.0,
+                            admin_overhead_yuan=0.0,
+                            service_coord_saving=0.0,
+                            is_opportunistic_type=True,
+                            compliance_propensity=0.22,
                         )
                     )
 

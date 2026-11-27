@@ -1,0 +1,7 @@
+env_tag,policy_label,grain_8yr_tons,grain_gain_vs_p0_tons,spending_8yr_wan,kg_per_100yuan_spent,pure_price_cap_pct,end_service_capacity_idx,ineligible_overclaim_wan,moral_hazard_loss_tons,idi_score,withdrawal_yr7_8_tons,withdrawal_gain_vs_p0_tons,sample_seed0_actions
+coupled_asymmetric_v2_1,p0,18636.55,0.0,0.0,0.0,0.0,0.056,0.0,0.0,0.8438,4699.83,0.0,"[0, 0, 0, 0, 0, 0, 0, 0]"
+coupled_asymmetric_v2_1,uniform_fixed,19130.78,494.23,119.351,41.41,18.73,0.056,0.0,0.0,0.8458,4801.21,101.38,"[28, 28, 28, 28, 28, 28, 28, 28]"
+coupled_asymmetric_v2_1,regional_fixed,19958.76,1322.21,66.096,200.04,89.06,0.875,0.0,0.0,0.8528,5105.06,405.23,"[30, 30, 30, 30, 30, 30, 30, 30]"
+coupled_asymmetric_v2_1,transparent_rule,17958.19,-678.36,93.121,-72.85,21.91,0.305,0.848,631.98,0.8446,4830.21,130.38,"[22, 11, 23, 23, 23, 11, 23, 23]"
+coupled_asymmetric_v2_1,myopic,19128.5,491.95,115.488,42.6,18.3,0.276,0.0,0.0,0.8456,4801.21,101.38,"[28, 28, 28, 28, 28, 28, 28, 30]"
+coupled_asymmetric_v2_1,gov_rl,20006.95,1370.4,88.775,154.37,69.4,0.753,0.0,0.0,0.8526,5109.39,409.56,"[30, 30, 30, 28, 30, 30, 28, 28]"

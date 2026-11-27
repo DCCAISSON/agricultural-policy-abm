@@ -39,11 +39,14 @@ class OperatorMesaAgent(mesa.Agent):
         self.ref_grain_share: float = blueprint.ref_grain_share
         self.active_in_market: bool = True
         self.consecutive_loss_years: int = 0
+        self.was_cultivating: bool = blueprint.initial_cultivating
+        self.audit_belief: float = 0.12
 
         # Current-year realized runtime registers (populated during model.step())
         self.current_opp_wage: float = blueprint.offfarm_wage_day
         self.current_fam_labor: float = blueprint.ag_days_year
         self.current_wc_open: float = blueprint.working_capital_init
+        self.current_year_num: int = 1
         self.last_year_summary: dict = {}
 
     def clone_into(self, new_model: "mesa.Model") -> "OperatorMesaAgent":
@@ -54,9 +57,12 @@ class OperatorMesaAgent(mesa.Agent):
         copy_ag.ref_grain_share = self.ref_grain_share
         copy_ag.active_in_market = self.active_in_market
         copy_ag.consecutive_loss_years = self.consecutive_loss_years
+        copy_ag.was_cultivating = self.was_cultivating
+        copy_ag.audit_belief = self.audit_belief
         copy_ag.current_opp_wage = self.current_opp_wage
         copy_ag.current_fam_labor = self.current_fam_labor
         copy_ag.current_wc_open = self.current_wc_open
+        copy_ag.current_year_num = self.current_year_num
         copy_ag.last_year_summary = self.last_year_summary.copy()
         return copy_ag
 
@@ -67,6 +73,8 @@ class OperatorMesaAgent(mesa.Agent):
         design: V2Design,
         sched: SubsidySchedule,
         working_cap_avail: float,
+        *,
+        rent_offset_yuan: float = 0.0,
     ) -> PMPPlanV2:
         return solve_actor_pmp_v2(
             operated_phys_mu,
@@ -79,6 +87,10 @@ class OperatorMesaAgent(mesa.Agent):
             opp_wage_day=self.current_opp_wage,
             working_cap_avail=working_cap_avail,
             ref_share=self.ref_grain_share,
+            was_cultivating=self.was_cultivating,
+            sim_year=self.current_year_num,
+            rent_offset_yuan=rent_offset_yuan,
+            audit_belief=self.audit_belief,
         )
 
     def evaluate_land_bid(
@@ -91,6 +103,8 @@ class OperatorMesaAgent(mesa.Agent):
         sched: SubsidySchedule,
         working_cap_avail: float,
         base_plan: PMPPlanV2 | None = None,
+        *,
+        setup_fee_override: float | None = None,
     ) -> float:
         if not self.active_in_market:
             return 0.0
@@ -108,6 +122,10 @@ class OperatorMesaAgent(mesa.Agent):
             working_cap_avail=working_cap_avail,
             ref_share=self.ref_grain_share,
             base_plan=base_plan,
+            was_cultivating=self.was_cultivating,
+            sim_year=self.current_year_num,
+            audit_belief=self.audit_belief,
+            setup_fee_override=setup_fee_override,
         )
 
     def step(self) -> None:
@@ -143,10 +161,12 @@ class HouseholdMesaAgent(OperatorMesaAgent):
 
         if trad_mu > 1e-9:
             rem_mu = held_mu + nontrad_mu
+            rent_all = expected_rent_per_mu * trad_mu
             plan_rel_all = self.evaluate_production(
-                rem_mu, held_new_tk_mu, design, sched, working_cap_after_held
+                rem_mu, held_new_tk_mu, design, sched, working_cap_after_held,
+                rent_offset_yuan=rent_all,
             )
-            val_rel_all = plan_rel_all.net_economic_surplus_yuan + expected_rent_per_mu * trad_mu
+            val_rel_all = plan_rel_all.net_economic_surplus_yuan + rent_all
             if val_rel_all > best_val + 1e-6:
                 best_keep = []
                 best_rel = list(own_trad_parcels)
@@ -159,10 +179,12 @@ class HouseholdMesaAgent(OperatorMesaAgent):
                 rel_sub = own_trad_parcels[half_n:]
                 keep_mu = sum(p.area for p in keep_sub)
                 rel_mu = sum(p.area for p in rel_sub)
+                rent_half = expected_rent_per_mu * rel_mu
                 plan_half = self.evaluate_production(
-                    rem_mu + keep_mu, held_new_tk_mu, design, sched, working_cap_after_held
+                    rem_mu + keep_mu, held_new_tk_mu, design, sched, working_cap_after_held,
+                    rent_offset_yuan=rent_half,
                 )
-                val_half = plan_half.net_economic_surplus_yuan + expected_rent_per_mu * rel_mu
+                val_half = plan_half.net_economic_surplus_yuan + rent_half
                 if val_half > best_val + 1e-6:
                     best_keep = keep_sub
                     best_rel = rel_sub

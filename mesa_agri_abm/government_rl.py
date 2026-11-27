@@ -30,41 +30,55 @@ def fork_all_menu_actions(
     next_year = model.year + 1
     reg_cache: dict[int, dict[LocalAllocV2, tuple[RegionalSubEconomy, float, float, list[float]]]] = {}
 
+    asym_on = model.design.enable_asymmetric_info_and_verification
     for r_idx, reg in enumerate(model.regions):
         distinct_pairs = list(dict.fromkeys(act[r_idx] for act in model.menu))
-        sub_map: dict[LocalAllocV2, tuple[RegionalSubEconomy, float, float, list[float]]] = {}
+        sub_map: dict[LocalAllocV2, tuple[RegionalSubEconomy, float, float, float, list[float]]] = {}
+        eff_cache: dict[tuple[str, int, bool], tuple[RegionalSubEconomy, float, float, float, list[float]]] = {}
+        p_mult = reg.perf_factor if model.design.enable_performance_budget_linkage else 1.0
         for pair in distinct_pairs:
+            eff_key = (pair[0].removesuffix("@xver"), pair[1], asym_on and pair[0].endswith("@xver"))
+            if eff_key in eff_cache:
+                sub_map[pair] = eff_cache[eff_key]
+                continue
             r_clone = reg.clone_into(model)
-            r_sum, _ = r_clone.step_region(next_year, pair[0], float(pair[1]), model.design)
-            obs = r_clone.observed
-            f5 = [
-                float(obs["grain_cult_rate"]),
-                float(obs["idle_rate"]),
-                float(obs["unabsorbed_rate"]),
-                float(obs["leased_rate"]),
-                float(obs["tight_liquidity_share"]),
-            ]
-            sub_map[pair] = (r_clone, float(r_sum["grain_kg"]), float(r_sum["spending"]), f5)
+            r_sum, _ = r_clone.step_region(next_year, pair[0], float(pair[1]) * p_mult, model.design)
+            f_vec = r_clone.public_feature_list(model.design)
+            rent_excess = max(0.0, float(r_sum["unit_rent_yuan_mu"]) - reg.tech.ask_rent_yuan_phys_mu * 2.4) * float(r_sum["leased_area_mu"])
+            tup = (r_clone, float(r_sum["grain_kg"]), float(r_sum["spending"]), rent_excess, f_vec)
+            eff_cache[eff_key] = tup
+            sub_map[pair] = tup
         reg_cache[r_idx] = sub_map
 
     n_act = len(model.menu)
     grains = np.zeros(n_act, dtype=np.float64)
     spends = np.zeros(n_act, dtype=np.float64)
+    rent_penalties = np.zeros(n_act, dtype=np.float64)
     next_phis: list[np.ndarray] = []
 
     for a_idx, act in enumerate(model.menu):
+        if model.design.enable_performance_budget_linkage and sum(c for _, c in act) > 0:
+            # Re-normalize regional performance caps so national budget stays exact; evaluate regional sums proportionally
+            raw_caps = [act[i][1] * model.regions[i].perf_factor for i in range(len(model.regions))]
+            scale_b = model.design.annual_common_budget_yuan / max(1.0, fsum(raw_caps))
+        else:
+            scale_b = 1.0
         grains[a_idx] = fsum(reg_cache[i][act[i]][1] for i in range(len(model.regions)))
-        spends[a_idx] = fsum(reg_cache[i][act[i]][2] for i in range(len(model.regions)))
+        spends[a_idx] = min(
+            float(model.design.annual_common_budget_yuan),
+            fsum(reg_cache[i][act[i]][2] * scale_b for i in range(len(model.regions))),
+        )
+        rent_penalties[a_idx] = fsum(reg_cache[i][act[i]][3] for i in range(len(model.regions))) / 100_000.0
         feat = [1.0]
         for i in range(len(model.regions)):
-            feat.extend(reg_cache[i][act[i]][3])
+            feat.extend(reg_cache[i][act[i]][4])
         next_phis.append(np.asarray(feat, dtype=np.float64))
 
     clone_lookup = {
         i: {pair: tup[0] for pair, tup in sub_map.items()}
         for i, sub_map in reg_cache.items()
     }
-    return grains, spends, next_phis, clone_lookup
+    return grains, spends, rent_penalties, next_phis, clone_lookup
 
 
 def advance_model_from_cache(
@@ -107,15 +121,28 @@ def _rollout_single_train_seed(args: tuple) -> dict[int, tuple[np.ndarray, np.nd
     n_actions = len(m.menu)
     for yr in range(1, design.main_years + 1):
         phi_t = m.extract_public_state_features()
-        grains_kg, spends_yuan, next_phis, clone_lookup = fork_all_menu_actions(m)
+        grains_kg, spends_yuan, rent_pen, next_phis, clone_lookup = fork_all_menu_actions(m)
         base_tons = grains_kg[0] / 1000.0
-        rewards = (grains_kg / 1000.0 - base_tons) - 0.02 * (spends_yuan / 100_000.0)
+        base_rent_pen = rent_pen[0]
+        rewards = (
+            (grains_kg / 1000.0 - base_tons)
+            - design.gov_fiscal_cost_weight * (spends_yuan / 100_000.0)
+            - design.gov_rent_cap_penalty_weight * np.maximum(0.0, rent_pen - base_rent_pen)
+        )
         out[yr] = (phi_t, rewards, next_phis)
         if yr < design.main_years:
-            if exp_rng.random() < 0.65:
-                a_next = int(exp_rng.integers(0, n_actions))
+            u_draw = exp_rng.random()
+            if design.menu_mode == "v2_25":
+                a_next = int(exp_rng.integers(0, n_actions)) if u_draw < 0.65 else int(np.argmax(rewards))
             else:
-                a_next = int(np.argmax(rewards))
+                # Balanced rollout coverage across service-accumulating portfolios, uniform actions, and greedy rewards
+                svc_port_acts = [a for a in (5, 8, 12, 16, 20, 25, 26, 27, 29, 30) if a < n_actions]
+                if u_draw < 0.40:
+                    a_next = int(exp_rng.integers(0, n_actions))
+                elif u_draw < 0.75 and svc_port_acts:
+                    a_next = int(svc_port_acts[int(exp_rng.integers(0, len(svc_port_acts)))])
+                else:
+                    a_next = int(np.argmax(rewards))
             m = advance_model_from_cache(m, a_next, clone_lookup)
     return out
 
@@ -159,15 +186,27 @@ def fit_v2_government_fqi(
         r_mat = np.vstack([row[1] for row in batch])
         n_feat = x_mat.shape[1]
 
-        reg_eye = design.fqi_ridge_penalty * np.eye(n_feat, dtype=np.float64)
-        reg_eye[0, 0] = 1e-6  # Unpenalized intercept
-        xtx_inv_xt = np.linalg.solve(x_mat.T @ x_mat + reg_eye, x_mat.T)
+        if design.menu_mode == "v2_25":
+            reg_eye = design.fqi_ridge_penalty * np.eye(n_feat, dtype=np.float64)
+            reg_eye[0, 0] = 1e-6  # Unpenalized intercept
+            xtx_inv_xt = np.linalg.solve(x_mat.T @ x_mat + reg_eye, x_mat.T)
+            w_myo = xtx_inv_xt @ r_mat
+        else:
+            mu_x = np.mean(x_mat[:, 1:], axis=0)
+            sd_x = np.maximum(1e-3, np.std(x_mat[:, 1:], axis=0))
+            z_mat = np.column_stack([np.ones(len(x_mat), dtype=np.float64), (x_mat[:, 1:] - mu_x) / sd_x])
+            reg_z = 2.0 * np.eye(n_feat, dtype=np.float64)
+            reg_z[0, 0] = 1e-6
+            ztz_inv_zt = np.linalg.solve(z_mat.T @ z_mat + reg_z, z_mat.T)
+            wz_myo = ztz_inv_zt @ r_mat
+            w_myo = np.zeros_like(wz_myo)
+            w_myo[1:] = wz_myo[1:] / sd_x[:, None]
+            w_myo[0] = wz_myo[0] - (mu_x / sd_x) @ wz_myo[1:]
 
         # Myopic (gamma = 0): fits immediate single-year reward surface
-        w_myo = xtx_inv_xt @ r_mat
         myopic_weights[yr] = w_myo.tolist()
 
-        # Gov-RL (gamma = 1): fits immediate reward + optimal continuation value
+        # Gov-RL (gamma = design.fqi_discount_gamma): fits immediate reward + discounted optimal continuation value
         if next_w_q is None:
             y_q = r_mat
         else:
@@ -177,9 +216,15 @@ def fit_v2_government_fqi(
                     q_next = n_phis[a_i] @ next_w_q
                     q_next[0] -= 1e-6
                     cont[idx, a_i] = float(np.max(q_next))
-            y_q = r_mat + cont
+            y_q = r_mat + design.fqi_discount_gamma * cont
 
-        w_q = xtx_inv_xt @ y_q
+        if design.menu_mode == "v2_25":
+            w_q = xtx_inv_xt @ y_q
+        else:
+            wz_q = ztz_inv_zt @ y_q
+            w_q = np.zeros_like(wz_q)
+            w_q[1:] = wz_q[1:] / sd_x[:, None]
+            w_q[0] = wz_q[0] - (mu_x / sd_x) @ wz_q[1:]
         q_weights[yr] = w_q.tolist()
         next_w_q = w_q
 
@@ -240,9 +285,18 @@ def select_dev_fixed_policies(
     else:
         leaderboard = [_eval_dev_action_worker(t) for t in tasks]
 
-    # Actions 1..5 are national uniform-instrument policies; Actions 6..24 are regional tilted / tailored mixes
-    best_uniform = max(leaderboard[1:6], key=lambda r: (r["dev_mean_8yr_grain_tons"], -r["dev_mean_8yr_spending_wan"]))
-    best_regional = max(leaderboard[6:25], key=lambda r: (r["dev_mean_8yr_grain_tons"], -r["dev_mean_8yr_spending_wan"]))
+    # Actions 1..5 (and 28 if uniform order_farming exists) are national uniform-instrument policies
+    uniform_idxs = [i for i in range(1, min(6, len(leaderboard)))]
+    if len(leaderboard) > 28:
+        uniform_idxs.append(28)
+    regional_idxs = [i for i in range(6, len(leaderboard)) if i not in uniform_idxs]
+
+    score_fn = lambda r: (
+        r["dev_mean_8yr_grain_tons"] - design.gov_fiscal_cost_weight * (r["dev_mean_8yr_spending_wan"] / 10.0),
+        -r["dev_mean_8yr_spending_wan"],
+    )
+    best_uniform = max((leaderboard[i] for i in uniform_idxs), key=score_fn)
+    best_regional = max((leaderboard[i] for i in regional_idxs), key=score_fn)
 
     return {
         "best_uniform_fixed_idx": int(best_uniform["action_idx"]),

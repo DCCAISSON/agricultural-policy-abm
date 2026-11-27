@@ -1,0 +1,10 @@
+arm,village_coord,lease_regime,grain_8yr_tons,grain_gain_vs_p0_tons,spending_8yr_wan,kg_per_100yuan_spent,pure_price_cap_pct,strict_succession_mu_yr,unmatched_released_mu_yr,leased_unplanted_mu_yr,end_service_capacity_idx,idi_score,withdrawal_yr7_8_gain_tons
+p0_dual_track,0,dual_track_1_3_4yr,18654.08,0.0,0.0,0.0,0.0,513.68,35.0,8.63,0.056,0.8453,0.0
+scale_takeover_alone,0,dual_track_1_3_4yr,18790.28,136.2,86.008,15.84,61.47,485.59,31.55,7.3,0.056,0.8393,27.2
+scale_plus_village_coord,1,dual_track_1_3_4yr,19321.83,667.75,93.007,71.8,64.93,621.71,11.28,10.41,0.056,0.8277,185.22
+order_farming_alone,0,dual_track_1_3_4yr,19111.44,457.35,119.351,38.32,18.11,451.77,32.0,7.37,0.056,0.8474,100.64
+service_trusteeship_accum,0,dual_track_1_3_4yr,20098.29,1444.2,59.101,244.36,103.94,299.99,20.84,1.66,1.0,0.8546,453.99
+village_coord_plus_service,1,dual_track_1_3_4yr,20438.24,1784.15,55.618,320.79,133.86,379.59,9.03,1.68,1.0,0.8441,571.24
+portfolio25_dual_track_lease,0,dual_track_1_3_4yr,20119.35,1465.27,92.902,157.72,63.36,309.11,21.24,1.81,0.875,0.8546,431.9
+portfolio25_short_1yr_lease,0,uniform_1yr,20136.72,1482.63,92.879,159.63,76.6,356.49,24.65,1.47,0.875,0.853,428.93
+portfolio25_long_3yr_lease,0,uniform_3yr,20169.54,1515.45,93.156,162.68,61.75,174.55,13.25,2.25,0.875,0.8549,453.4
