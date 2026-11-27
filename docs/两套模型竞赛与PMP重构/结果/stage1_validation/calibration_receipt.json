@@ -1,0 +1,122 @@
+{
+  "household_baseline_sha256": "2521c3a80c35fc39068fcf79db02eaff54a1b31683e3f1e948a86f37c913d917",
+  "cohort_link_sha256": "28b094c623a9ee0138f08b084422e37f04e850b187051cb88706439e18f45936",
+  "nfps_2009_2015_sha256": "d5860f1f546d8c186b617f42eae4434d241441cce2dce3a2624c28a950e005e6",
+  "dictionary_sha256": "f7e4b203b2816e74eda67a55a9e8e2bf4153fe3d26f4062552d66a6d48bf86d2",
+  "design_sha256": "23a0fcac2645516cc6da2bc2515d40c21af37a8dc598e2a9bd723c44c3834853",
+  "regions": [
+    {
+      "region": "东部",
+      "households": 141,
+      "regional_entrants": 6,
+      "submarkets": 6,
+      "physical_mu": 699.5,
+      "verified_tradable_mu": 582.3,
+      "parcels": 363,
+      "grain_yield_kg_sown_mu": 429.167,
+      "grain_price_yuan_kg": 2.6276,
+      "grain_input_yuan_sown_mu": 356.48,
+      "grain_labor_days_sown_mu": 12.15,
+      "cash_rev_yuan_sown_mu": 2427.86,
+      "cash_input_yuan_sown_mu": 776.92,
+      "hired_wage_yuan_day": 66.17,
+      "ask_rent_yuan_phys_mu": 231.36,
+      "max_mci": 2.75,
+      "observed_2010_grain_kg": 268681.5
+    },
+    {
+      "region": "中部",
+      "households": 173,
+      "regional_entrants": 6,
+      "submarkets": 6,
+      "physical_mu": 958.4,
+      "verified_tradable_mu": 732.2,
+      "parcels": 437,
+      "grain_yield_kg_sown_mu": 405.28,
+      "grain_price_yuan_kg": 2.5004,
+      "grain_input_yuan_sown_mu": 305.27,
+      "grain_labor_days_sown_mu": 13.68,
+      "cash_rev_yuan_sown_mu": 1679.42,
+      "cash_input_yuan_sown_mu": 537.41,
+      "hired_wage_yuan_day": 68.35,
+      "ask_rent_yuan_phys_mu": 212.43,
+      "max_mci": 2.446,
+      "observed_2010_grain_kg": 511411.0
+    },
+    {
+      "region": "西部",
+      "households": 185,
+      "regional_entrants": 8,
+      "submarkets": 8,
+      "physical_mu": 1208.8,
+      "verified_tradable_mu": 876.2,
+      "parcels": 499,
+      "grain_yield_kg_sown_mu": 378.75,
+      "grain_price_yuan_kg": 2.5707,
+      "grain_input_yuan_sown_mu": 297.46,
+      "grain_labor_days_sown_mu": 16.0,
+      "cash_rev_yuan_sown_mu": 1692.36,
+      "cash_input_yuan_sown_mu": 541.55,
+      "hired_wage_yuan_day": 57.47,
+      "ask_rent_yuan_phys_mu": 202.86,
+      "max_mci": 2.75,
+      "observed_2010_grain_kg": 492762.0
+    },
+    {
+      "region": "东北",
+      "households": 101,
+      "regional_entrants": 3,
+      "submarkets": 3,
+      "physical_mu": 2410.8,
+      "verified_tradable_mu": 1818.5,
+      "parcels": 532,
+      "grain_yield_kg_sown_mu": 471.497,
+      "grain_price_yuan_kg": 2.3158,
+      "grain_input_yuan_sown_mu": 271.28,
+      "grain_labor_days_sown_mu": 6.67,
+      "cash_rev_yuan_sown_mu": 1174.09,
+      "cash_input_yuan_sown_mu": 375.71,
+      "hired_wage_yuan_day": 105.86,
+      "ask_rent_yuan_phys_mu": 246.18,
+      "max_mci": 1.15,
+      "observed_2010_grain_kg": 778773.0
+    }
+  ],
+  "parameter_provenance": [
+    {
+      "parameter": "household_land_and_rights",
+      "category": "direct_observation",
+      "source": "2010 NFPS cohort600 area_e & area_e1"
+    },
+    {
+      "parameter": "grain_yield_price_inputs_labor",
+      "category": "pre2011_statistical_calibration",
+      "source": "2009-2010 NFPS regional medians + 2010 Empirical Bayes yield shrinkage"
+    },
+    {
+      "parameter": "hired_labor_service_wage",
+      "category": "pre2011_statistical_calibration",
+      "source": "2009-2010 NFPS observed labor_hf / labor_hd regional medians"
+    },
+    {
+      "parameter": "annual_family_farming_days",
+      "category": "literature_and_survey_reference",
+      "source": "CFPS 2010 farming days (180 pure ag / 120 off-farm active) x NFPS hhlabornum"
+    },
+    {
+      "parameter": "working_capital_liquidity_share",
+      "category": "survey_reference_calibration",
+      "source": "CHFS 2011 agricultural household liquid working capital median vs NFPS total savings"
+    },
+    {
+      "parameter": "pmp_quadratic_curvature_gamma",
+      "category": "structural_calibration",
+      "source": "Howitt (1995) concave PMP calibrated at 2010 baseline crop shares (supply elasticity ~0.25)"
+    },
+    {
+      "parameter": "fiscal_budget_and_rate_cap",
+      "category": "statutory_policy_standard",
+      "source": "98,953 yuan/year shared envelope (18.75 yuan/sample-mu), 85 yuan/mu statutory ceiling"
+    }
+  ]
+}

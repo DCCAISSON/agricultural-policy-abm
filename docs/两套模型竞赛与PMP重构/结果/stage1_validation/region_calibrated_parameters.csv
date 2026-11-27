@@ -1,0 +1,5 @@
+region,households,regional_entrants,submarkets,physical_mu,verified_tradable_mu,parcels,grain_yield_kg_sown_mu,grain_price_yuan_kg,grain_input_yuan_sown_mu,grain_labor_days_sown_mu,cash_rev_yuan_sown_mu,cash_input_yuan_sown_mu,hired_wage_yuan_day,ask_rent_yuan_phys_mu,max_mci,observed_2010_grain_kg
+东部,141,6,6,699.5,582.3,363,429.167,2.6276,356.48,12.15,2427.86,776.92,66.17,231.36,2.75,268681.5
+中部,173,6,6,958.4,732.2,437,405.28,2.5004,305.27,13.68,1679.42,537.41,68.35,212.43,2.446,511411.0
+西部,185,8,8,1208.8,876.2,499,378.75,2.5707,297.46,16.0,1692.36,541.55,57.47,202.86,2.75,492762.0
+东北,101,3,3,2410.8,1818.5,532,471.497,2.3158,271.28,6.67,1174.09,375.71,105.86,246.18,1.15,778773.0

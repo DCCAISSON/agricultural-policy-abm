@@ -1,0 +1,7 @@
+{
+  "audit_status": "PASSED_ALL_CHECKS",
+  "region_year_rows_verified": 46080,
+  "joint_4region_steps_verified": 11520,
+  "seed_574001_exact_replay_checks": 192,
+  "privacy_sanitized_files_checked": 26
+}

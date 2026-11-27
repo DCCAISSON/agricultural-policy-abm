@@ -1,0 +1,6 @@
+arm,seed,year,comparable_n,survey_sown,sim_sown,survey_mixed,sim_mixed,survey_pure_grain,sim_pure_grain,survey_pure_cash,sim_pure_cash,survey_grain_mu_seasons,sim_grain_mu_seasons,survey_cash_mu_seasons,sim_cash_mu_seasons,survey_grain_tons,sim_grain_tons,survey_closing_phys_mu,sim_closing_phys_mu,participation_err_pp,mixed_err_pp,grain_share_q_mae,grain_mu_rel_err,grain_kg_rel_err,closing_mu_rel_err,all_5_gates_pass
+one_step_conditional,0,2011,569,539,533,293,314,199,202,47,17,5179.3,4340.22,1101.9,814.4,2143.356,1849.903,5111.2,4720.6,0.0105,0.0369,0.0186,0.162,0.1369,0.0764,0
+one_step_conditional,0,2012,533,495,479,261,284,187,177,47,18,4706.4,3922.33,1032.7,799.71,2179.035,1686.568,4895.5,4531.3,0.03,0.0432,0.026,0.1666,0.226,0.0744,0
+one_step_conditional,0,2013,537,474,470,255,270,167,183,52,17,4383.0,3868.62,1276.2,726.1,1935.322,1663.97,4586.3,4490.9,0.0074,0.0279,0.0247,0.1174,0.1402,0.0208,0
+one_step_conditional,0,2014,532,449,437,234,250,171,164,44,23,4822.1,3532.45,930.5,705.97,2353.284,1519.731,5013.6,4155.7,0.0226,0.0301,0.0305,0.2674,0.3542,0.1711,0
+one_step_conditional,0,2015,534,445,425,207,250,180,160,58,15,5017.7,3487.57,1238.2,618.99,2381.235,1497.158,5251.1,4682.5,0.0375,0.0805,0.0486,0.3049,0.3713,0.1083,0

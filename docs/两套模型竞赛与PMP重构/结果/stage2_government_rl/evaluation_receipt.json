@@ -1,0 +1,22 @@
+{
+  "status": "completed_and_verified",
+  "design_sha256": "23a0fcac2645516cc6da2bc2515d40c21af37a8dc598e2a9bd723c44c3834853",
+  "common_annual_budget_yuan": 98953,
+  "strong_fixed_selected_on_dev": "fixed_17",
+  "eval_seeds_count": 48,
+  "region_year_rows": 46080,
+  "q_fallback_count": 0,
+  "fqi_year_r2": {
+    "year_8": 0.0003,
+    "year_7": 0.0009,
+    "year_6": 0.0008,
+    "year_5": 0.0012,
+    "year_4": 0.0016,
+    "year_3": 0.0018,
+    "year_2": 0.0019,
+    "year_1": -0.0
+  },
+  "python": "3.11.2",
+  "numpy": "1.26.4",
+  "pandas": "2.2.3"
+}

@@ -1,0 +1,9 @@
+strategy,action,reason,region_year_rows,decision_count
+myopic,9,fqi_supported,1344,336
+myopic,17,fqi_supported,192,48
+myopic_repeat,9,fqi_supported,1344,336
+myopic_repeat,17,fqi_supported,192,48
+q,9,fqi_supported,1344,336
+q,17,fqi_supported,192,48
+q_repeat,9,fqi_supported,1344,336
+q_repeat,17,fqi_supported,192,48

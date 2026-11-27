@@ -1,0 +1,8 @@
+parameter,category,source
+household_land_and_rights,direct_observation,2010 NFPS cohort600 area_e & area_e1
+grain_yield_price_inputs_labor,pre2011_statistical_calibration,2009-2010 NFPS regional medians + 2010 Empirical Bayes yield shrinkage
+hired_labor_service_wage,pre2011_statistical_calibration,2009-2010 NFPS observed labor_hf / labor_hd regional medians
+annual_family_farming_days,literature_and_survey_reference,CFPS 2010 farming days (180 pure ag / 120 off-farm active) x NFPS hhlabornum
+working_capital_liquidity_share,survey_reference_calibration,CHFS 2011 agricultural household liquid working capital median vs NFPS total savings
+pmp_quadratic_curvature_gamma,structural_calibration,Howitt (1995) concave PMP calibrated at 2010 baseline crop shares (supply elasticity ~0.25)
+fiscal_budget_and_rate_cap,statutory_policy_standard,"98,953 yuan/year shared envelope (18.75 yuan/sample-mu), 85 yuan/mu statutory ceiling"

@@ -1,0 +1,4 @@
+comparison,comparator,bonferroni_k,delta_grain_tons,grain_ci_low,grain_ci_high,delta_spending_wanyuan,spending_ci_low,spending_ci_high,delta_withdrawal_tons,withdrawal_ci_low,withdrawal_ci_high
+q_minus_strong_fixed,fixed_17,6,-4.8,-21.2,11.59,-9.458,-9.553,-9.362,-20.12,-25.54,-14.7
+q_minus_same_info_myopic,myopic,6,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+q_minus_area_prop_grain_pre,fixed_17,1,-4.8,-16.78,7.17,-9.458,-9.527,-9.388,-20.12,-24.08,-16.16

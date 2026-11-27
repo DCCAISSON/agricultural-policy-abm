@@ -1,0 +1,9 @@
+arm,year,survey_sown,sim_sown,survey_mixed,sim_mixed,survey_grain_mu_seasons,sim_grain_mu_seasons,survey_grain_tons,sim_grain_tons,survey_closing_phys_mu,sim_closing_phys_mu,mean_5_gate_pass_rate
+ablation_near_LP_corner,2011,539,553,293,127.25,5179.3,3970.77,2143.356,1588.65,5111.2,4653.77,0
+ablation_near_LP_corner,2015,445,521,207,43,5017.7,3360.11,2381.235,1335.44,5251.1,3929.74,0
+ablation_no_hired_labor,2011,539,551.5,293,308.25,5179.3,4351.08,2143.356,1715.31,5111.2,4662.65,0
+ablation_no_hired_labor,2015,445,521.25,207,317.75,5017.7,4100.34,2381.235,1575.19,5251.1,3932.16,0
+competing_AHM_PMP_closed,2011,539,551.5,293,308.25,5179.3,4375.79,2143.356,1727.46,5111.2,4673.51,0
+competing_AHM_PMP_closed,2015,445,521.25,207,317.5,5017.7,4119.68,2381.235,1583.5,5251.1,3933.69,0
+competing_AHM_PMP_village,2011,539,553.25,293,309.5,5179.3,4442.43,2143.356,1755.22,5111.2,4731.01,0
+competing_AHM_PMP_village,2015,445,523.5,207,312,5017.7,4391.33,2381.235,1689.89,5251.1,4148.18,0
