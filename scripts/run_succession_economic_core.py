@@ -97,6 +97,9 @@ def _path(args):
                 else:
                     vals = (f["planted_area"],0.,f["harvest"]) if f["crop"]=="grain" else (
                         0.,f["planted_area"],0.) if f["crop"]=="cash" else (0.,0.,0.)
+                    if f["crop"] in ("grain","cash"):
+                        sums["legacy_"+f["crop"]][0] += f["planted_area"]
+                        sums["legacy_"+f["crop"]][1] += f["harvest"]
                 for i,v in enumerate(vals):
                     worked[who][i] += v
                 if f["lease"]:
@@ -160,7 +163,8 @@ def run(project, out, workers):
         for (arm,seed,*_),result in zip(jobs,iterator,strict=True):
             _heterogeneous_csv(paths/f"{arm}_{seed}_region_year.csv",result[0])
             csv_write(paths/f"{arm}_{seed}_household_history.csv",result[1])
-            csv_write(paths/f"{arm}_{seed}_crop_year.csv",result[2])
+            if result[2]:
+                csv_write(paths/f"{arm}_{seed}_crop_year.csv",result[2])
             results.append(result)
             print(f"Completed {arm} / {seed}",flush=True)
 
