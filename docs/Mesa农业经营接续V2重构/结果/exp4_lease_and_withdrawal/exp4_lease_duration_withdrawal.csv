@@ -1,0 +1,13 @@
+contract_spec,lease_years,cash_carryover,policy,active_leased_unplanted_mu_yr,post_stop_yr1_grain_diff_tons,post_stop_yr2_grain_diff_tons,post_stop_yr3_grain_diff_tons,post_stop_3yr_total_diff_tons,post_stop_3yr_ci95,beneficiary_cohort_mu,cohort_same_op_share_yr1_pct,cohort_same_op_share_yr3_pct,cohort_still_grain_share_yr1_pct,cohort_still_grain_share_yr3_pct
+lease_1yr_carry_on,1,1,producer_pre,0.35,55.75,52.9,52.53,161.19,"[155.60, 166.78]",5276.41,96.8,96.5,84.2,83.3
+lease_1yr_carry_on,1,1,scale_takeover_pre,0.19,2.98,1.9,2.52,7.4,"[5.80, 9.01]",1350.93,83.6,82.9,92.7,92.1
+lease_1yr_carry_on,1,1,service_trusteeship,0.31,46.77,43.67,42.22,132.67,"[127.39, 137.95]",5276.41,96.6,96.4,83.8,82.8
+lease_2yr_carry_on,2,1,producer_pre,0.87,49.64,48.52,47.91,146.06,"[139.70, 152.42]",5274.97,97.4,95.9,84.5,83.5
+lease_2yr_carry_on,2,1,scale_takeover_pre,0.69,0.86,2.67,2.27,5.8,"[3.57, 8.03]",1344.71,85.3,80.7,93.5,93.0
+lease_2yr_carry_on,2,1,service_trusteeship,0.87,42.88,40.75,39.77,123.4,"[117.68, 129.12]",5274.97,97.3,95.6,84.1,83.1
+lease_3yr_carry_on,3,1,producer_pre,1.31,49.5,47.81,48.14,145.45,"[138.65, 152.24]",5274.0,97.7,95.8,84.5,83.7
+lease_3yr_carry_on,3,1,scale_takeover_pre,1.08,1.74,2.96,3.06,7.76,"[5.13, 10.39]",1322.48,86.2,80.2,93.8,93.5
+lease_3yr_carry_on,3,1,service_trusteeship,1.4,42.63,39.66,39.75,122.04,"[116.11, 127.98]",5273.97,97.5,95.5,84.1,83.3
+lease_2yr_no_cash_carry,2,0,producer_pre,1.36,41.68,38.8,36.49,116.97,"[113.11, 120.82]",5274.7,97.9,96.9,85.6,84.7
+lease_2yr_no_cash_carry,2,0,scale_takeover_pre,2.04,4.71,2.9,2.41,10.02,"[6.73, 13.30]",1139.36,87.1,83.9,91.7,91.2
+lease_2yr_no_cash_carry,2,0,service_trusteeship,1.31,33.55,31.52,29.59,94.66,"[90.92, 98.41]",5274.37,97.9,96.9,85.2,84.4

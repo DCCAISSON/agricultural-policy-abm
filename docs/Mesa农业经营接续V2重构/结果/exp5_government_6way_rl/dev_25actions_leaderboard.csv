@@ -1,0 +1,26 @@
+action_idx,menu_spec,dev_mean_8yr_grain_tons,dev_mean_8yr_spending_wan
+0,"(('none', 0), ('none', 0), ('none', 0), ('none', 0))",17677.2912,0.0
+1,"(('producer_pre', 19882), ('producer_pre', 27240), ('producer_pre', 34357), ('producer_pre', 68521))",18208.9978,119.5989
+2,"(('producer_post', 19882), ('producer_post', 27240), ('producer_post', 34357), ('producer_post', 68521))",18222.2988,119.6205
+3,"(('scale_takeover_pre', 19882), ('scale_takeover_pre', 27240), ('scale_takeover_pre', 34357), ('scale_takeover_pre', 68521))",17736.6546,56.6106
+4,"(('scale_takeover_post', 19882), ('scale_takeover_post', 27240), ('scale_takeover_post', 34357), ('scale_takeover_post', 68521))",17733.1102,55.9613
+5,"(('service_trusteeship', 19882), ('service_trusteeship', 27240), ('service_trusteeship', 34357), ('service_trusteeship', 68521))",18144.7066,94.2483
+6,"(('producer_pre', 75000), ('producer_pre', 15701), ('producer_pre', 19803), ('producer_pre', 39496))",18264.4635,112.3639
+7,"(('scale_takeover_pre', 41970), ('producer_pre', 22616), ('producer_pre', 28525), ('producer_pre', 56889))",18033.6444,87.2808
+8,"(('service_trusteeship', 62955), ('service_trusteeship', 18223), ('service_trusteeship', 22984), ('service_trusteeship', 45838))",18146.844,86.6737
+9,"(('producer_post', 75000), ('producer_pre', 15701), ('producer_pre', 19803), ('producer_pre', 39496))",18257.6056,112.2299
+10,"(('producer_pre', 12147), ('producer_pre', 75000), ('producer_pre', 20990), ('producer_pre', 41863))",18211.0148,119.345
+11,"(('producer_pre', 14980), ('scale_takeover_pre', 57504), ('producer_pre', 25887), ('producer_pre', 51629))",18033.8878,78.9398
+12,"(('service_trusteeship', 12147), ('service_trusteeship', 75000), ('service_trusteeship', 20990), ('service_trusteeship', 41863))",18103.495,88.2455
+13,"(('producer_pre', 12147), ('producer_post', 75000), ('producer_pre', 20990), ('producer_pre', 41863))",18222.0743,119.3764
+14,"(('producer_pre', 12894), ('producer_pre', 17667), ('producer_pre', 75000), ('producer_pre', 44439))",18145.2674,119.6611
+15,"(('producer_pre', 13319), ('producer_pre', 18249), ('scale_takeover_pre', 72528), ('producer_pre', 45904))",18043.2313,94.2195
+16,"(('service_trusteeship', 12894), ('service_trusteeship', 17667), ('service_trusteeship', 75000), ('service_trusteeship', 44439))",18103.0207,87.2028
+17,"(('producer_pre', 12894), ('producer_pre', 17667), ('producer_post', 75000), ('producer_pre', 44439))",18153.6868,119.6974
+18,"(('producer_pre', 18301), ('producer_pre', 25074), ('producer_pre', 31625), ('producer_pre', 75000))",18206.7826,119.5891
+19,"(('producer_pre', 18301), ('producer_pre', 25074), ('producer_pre', 31625), ('scale_takeover_pre', 75000))",17970.9487,97.5271
+20,"(('service_trusteeship', 18301), ('service_trusteeship', 25074), ('service_trusteeship', 31625), ('service_trusteeship', 75000))",18125.0837,90.1516
+21,"(('producer_pre', 18301), ('producer_pre', 25074), ('producer_pre', 31625), ('producer_post', 75000))",18202.1125,119.6069
+22,"(('service_trusteeship', 19882), ('scale_takeover_pre', 27240), ('service_trusteeship', 34357), ('scale_takeover_pre', 68521))",17911.4085,79.5659
+23,"(('producer_pre', 19882), ('producer_pre', 27240), ('service_trusteeship', 34357), ('scale_takeover_pre', 68521))",17991.4079,97.9352
+24,"(('producer_pre', 19882), ('scale_takeover_pre', 27240), ('producer_pre', 34357), ('producer_pre', 68521))",18126.2129,101.193

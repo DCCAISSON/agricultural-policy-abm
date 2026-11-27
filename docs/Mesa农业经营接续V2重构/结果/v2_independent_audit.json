@@ -1,0 +1,8 @@
+{
+  "status": "PASSED_ALL_V2_AUDITS",
+  "joint_trajectory_rows_verified": 2880,
+  "regional_trajectory_rows_verified": 11520,
+  "deterministic_replay_years_verified": 8,
+  "sanitized_artifacts_checked": 18,
+  "interactive_inspector_bytes": 12841027
+}
