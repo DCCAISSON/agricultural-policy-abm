@@ -59,10 +59,10 @@ def main() -> None:
     # 3. Verify interactive HTML exists, is non-empty, and contains zero raw NFPS hhid (8+ digit household codes)
     assert ui_html.exists() and ui_html.stat().st_size > 25_000
     raw_hhid_pat = re.compile(r"\b\d{10,}\b")
-    res_v21_dir = wt_root / "docs/Mesa农业经营接续V2重构/结果_V2_1深化"
+    res_v22_dir = wt_root / "docs/Mesa农业经营接续V2重构/结果_V2_2净版"
     scan_targets = list(res_dir.rglob("*.csv")) + list(res_dir.rglob("*.json")) + [ui_html]
-    if res_v21_dir.exists():
-        scan_targets.extend(list(res_v21_dir.rglob("*.csv")) + list(res_v21_dir.rglob("*.json")))
+    if res_v22_dir.exists():
+        scan_targets.extend(list(res_v22_dir.rglob("*.csv")) + list(res_v22_dir.rglob("*.json")))
     checked_files = 0
     for f in scan_targets:
         txt = f.read_text(encoding="utf-8")
@@ -71,21 +71,21 @@ def main() -> None:
             assert not raw_hhid_pat.search(txt), f"Potential raw identifier in {f}"
         checked_files += 1
 
-    v21_rl_verified = False
-    if (res_v21_dir / "exp_rl_necessity_intertemporal_v2_1_6way.csv").exists():
-        df_rl21 = pd.read_csv(res_v21_dir / "exp_rl_necessity_intertemporal_v2_1_6way.csv")
-        assert (df_rl21["spending_8yr_wan"] <= 120.0 + 1e-2).all()
-        g_rl = float(df_rl21.loc[df_rl21["policy_label"] == "gov_rl", "grain_8yr_tons"].iloc[0])
-        g_myo = float(df_rl21.loc[df_rl21["policy_label"] == "myopic", "grain_8yr_tons"].iloc[0])
-        assert g_rl > g_myo + 10.0, f"Expected Gov-RL > Myopic in V2.1 intertemporal benchmark, got {g_rl} vs {g_myo}"
-        v21_rl_verified = True
+    v22_verified = False
+    if (res_v22_dir / "exp5_government_6way_v2_2_summary.csv").exists():
+        df_rl22 = pd.read_csv(res_v22_dir / "exp5_government_6way_v2_2_summary.csv")
+        assert (df_rl22["spending_8yr_wan"] <= 120.0 + 1e-2).all()
+        if (res_v22_dir / "exp4_interprovincial_order_arbitrage_v2_2.csv").exists():
+            df_e4 = pd.read_csv(res_v22_dir / "exp4_interprovincial_order_arbitrage_v2_2.csv")
+            assert (df_e4["bilateral_conservation_gap_kg"].abs() <= 1e-4).all()
+        v22_verified = True
 
     audit_out = {
-        "status": "PASSED_ALL_V2_AND_V2_1_AUDITS" if v21_rl_verified else "PASSED_ALL_V2_AUDITS",
+        "status": "PASSED_ALL_V2_AND_V2_2_AUDITS" if v22_verified else "PASSED_ALL_V2_AUDITS",
         "joint_trajectory_rows_verified": len(df_j),
         "regional_trajectory_rows_verified": len(df_r),
         "deterministic_replay_years_verified": replay_matches,
-        "v2_1_intertemporal_rl_verified": v21_rl_verified,
+        "v2_2_clean_and_arbitrage_verified": v22_verified,
         "sanitized_artifacts_checked": checked_files,
         "interactive_inspector_bytes": ui_html.stat().st_size,
     }

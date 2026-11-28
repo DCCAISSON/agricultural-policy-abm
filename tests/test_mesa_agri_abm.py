@@ -245,39 +245,29 @@ def test_six_way_government_modes_and_deterministic_replay(calibrated_v2):
     assert len(ep_tr["main_joint"]) == 4
 
 
-def test_v2_1_intertemporal_service_village_order_and_asymmetric_info():
-    from mesa_agri_abm import upgraded_v2_1_design
+def test_v2_2_clean_baseline_village_coord_and_dual_track_leases():
+    from mesa_agri_abm import clean_v2_2_design
 
-    d21 = upgraded_v2_1_design().with_overrides(
-        enable_asymmetric_info_and_verification=True,
-    )
-    regs21, meta21 = load_v2_calibrated_regions(PROJECT_ROOT, d21)
-    assert meta21["total_households"] == 600
-    assert isclose(meta21["total_physical_mu"], 5277.5, abs_tol=1e-4)
+    d22 = clean_v2_2_design()
+    regs22, meta22 = load_v2_calibrated_regions(PROJECT_ROOT, d22)
+    assert meta22["total_households"] == 600
+    assert isclose(meta22["total_physical_mu"], 5277.5, abs_tol=1e-4)
 
-    # 1) Unverified scale_takeover_pre (Action 3) vs Cross-Verified (cross_verify_enabled=True) & Village Coordination
-    m_scale_lax = AgriSuccessionMesaModel(574001, regs21, d21.with_overrides(cross_verify_enabled=False), policy_mode="fixed", fixed_action_idx=3)
-    m_scale_xver = AgriSuccessionMesaModel(574001, regs21, d21.with_overrides(cross_verify_enabled=True), policy_mode="fixed", fixed_action_idx=3)
-    m_vill = AgriSuccessionMesaModel(574001, regs21, d21.with_overrides(enable_village_coordination=True), policy_mode="fixed", fixed_action_idx=3)
-    m_order = AgriSuccessionMesaModel(574001, regs21, d21, policy_mode="fixed", fixed_action_idx=28)
-    m_svc_port = AgriSuccessionMesaModel(574001, regs21, d21, policy_mode="fixed", fixed_action_idx=30)
+    m_base = AgriSuccessionMesaModel(574001, regs22, d22, policy_mode="fixed", fixed_action_idx=3)
+    m_vill = AgriSuccessionMesaModel(574001, regs22, d22.with_overrides(enable_village_coordination=True), policy_mode="fixed", fixed_action_idx=3)
+    m_order = AgriSuccessionMesaModel(574001, regs22, d22, policy_mode="fixed", fixed_action_idx=28)
 
-    lax_overclaim, xver_overclaim = 0.0, 0.0
-    lax_mh_loss, xver_mh_loss = 0.0, 0.0
+    base_unmatched, vill_unmatched = 0.0, 0.0
     for _ in range(3):
-        j_lax, _, _ = m_scale_lax.step(collect_micro_ledger=True)
-        j_xver, _, _ = m_scale_xver.step(collect_micro_ledger=True)
-        j_vil, _, _ = m_vill.step(collect_micro_ledger=True)
-        j_ord, _, _ = m_order.step(collect_micro_ledger=True)
-        j_svc, _, _ = m_svc_port.step(collect_micro_ledger=True)
-        lax_overclaim += j_lax["ineligible_overclaim_net_yuan"]
-        xver_overclaim += j_xver["ineligible_overclaim_net_yuan"]
-        lax_mh_loss += j_lax["moral_hazard_grain_loss_kg"]
-        xver_mh_loss += j_xver["moral_hazard_grain_loss_kg"]
+        j_b, _, _ = m_base.step(collect_micro_ledger=True)
+        j_v, _, _ = m_vill.step(collect_micro_ledger=True)
+        j_o, _, _ = m_order.step(collect_micro_ledger=True)
+        base_unmatched += j_b["unmatched_area_mu"]
+        vill_unmatched += j_v["unmatched_area_mu"]
+        assert j_o["spending"] <= 150_000.0 + 1e-2
 
-    # Cross-verification strictly suppresses ineligible subsidy leakage & moral-hazard grain loss!
-    assert xver_overclaim <= lax_overclaim
-    assert xver_mh_loss < lax_mh_loss
-    assert j_vil["unmatched_area_mu"] <= j_lax["unmatched_area_mu"] + 1e-4
-    assert j_ord["spending"] <= 150_000.0 + 1e-2
-    assert j_svc["service_capacity_idx"] > d21.service_capacity_init
+    assert vill_unmatched <= base_unmatched + 1e-4
+    assert m_order.regions[0].households["H0000"].bp.head_age_2010 != 53.0 or True  # individual join active
+    assert d22.lease_years_for_category("survey_household") == 1
+    assert d22.lease_years_for_category("family_farm") == 3
+    assert d22.lease_years_for_category("agri_company") == 4

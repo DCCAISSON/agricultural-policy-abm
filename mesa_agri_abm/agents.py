@@ -40,7 +40,6 @@ class OperatorMesaAgent(mesa.Agent):
         self.active_in_market: bool = True
         self.consecutive_loss_years: int = 0
         self.was_cultivating: bool = blueprint.initial_cultivating
-        self.audit_belief: float = 0.12
 
         # Current-year realized runtime registers (populated during model.step())
         self.current_opp_wage: float = blueprint.offfarm_wage_day
@@ -58,7 +57,6 @@ class OperatorMesaAgent(mesa.Agent):
         copy_ag.active_in_market = self.active_in_market
         copy_ag.consecutive_loss_years = self.consecutive_loss_years
         copy_ag.was_cultivating = self.was_cultivating
-        copy_ag.audit_belief = self.audit_belief
         copy_ag.current_opp_wage = self.current_opp_wage
         copy_ag.current_fam_labor = self.current_fam_labor
         copy_ag.current_wc_open = self.current_wc_open
@@ -90,7 +88,6 @@ class OperatorMesaAgent(mesa.Agent):
             was_cultivating=self.was_cultivating,
             sim_year=self.current_year_num,
             rent_offset_yuan=rent_offset_yuan,
-            audit_belief=self.audit_belief,
         )
 
     def evaluate_land_bid(
@@ -124,7 +121,6 @@ class OperatorMesaAgent(mesa.Agent):
             base_plan=base_plan,
             was_cultivating=self.was_cultivating,
             sim_year=self.current_year_num,
-            audit_belief=self.audit_belief,
             setup_fee_override=setup_fee_override,
         )
 

@@ -92,12 +92,12 @@ class V2Design:
     fqi_discount_gamma: float = 1.0
     gov_fiscal_cost_weight: float = 0.02
     gov_rent_cap_penalty_weight: float = 0.0
-    menu_mode: str = "v2_25"                       # "v2_25" (frozen V2) or "v2_1_portfolio" (cross-instrument + governance)
+    menu_mode: str = "v2_25"                       # "v2_25" (frozen V2) or "v2_2_clean" (clean V2.2 portfolio)
     dev_seeds: tuple[int, int] = (571001, 571012)
     train_seeds: tuple[int, int] = (572001, 572032)
     eval_seeds: tuple[int, int] = (574001, 574048)
 
-    # 7. V2.1 Pre-2011 Individual Aging, Migrant Return-Trip & Exit Inertia (default False preserves exact V2)
+    # 7. V2.2 Pre-2011 Individual Aging, Migrant Return-Trip & Exit Inertia (default False preserves exact V2.0)
     enable_household_aging_and_exit_inertia: bool = False
     elderly_labor_decay_rate: float = 0.042        # Annual farm labor capacity attrition above age 58
     migrant_return_trip_days: float = 5.2          # Annual cross-region return-trip & supervision days for migrant hh
@@ -108,35 +108,15 @@ class V2Design:
     dynamic_expected_rent_update: bool = False     # Update expected lease-out rent toward lagged clearing market rent
     allow_exit_entrust_nontrad: bool = False       # Allow fully exiting households to entrust residual plots (代耕流转)
 
-    # 8. V2.1 Realistic Intertemporal Dynamics: Dual-Track Leases, Service Accumulation & Performance-Linked Budget
+    # 8. V2.2 Realistic Institutions: Dual-Track Leases, Village Coordination & Order-Grain Subsidies
     enable_heterogeneous_lease_terms: bool = False # Smallholder 1-yr oral vs FamilyFarm/Coop 3-yr vs Company 4-yr
-    enable_service_capacity_accumulation: bool = False
-    service_capacity_init: float = 0.10            # Initial regional socialized machinery network maturity [0, 1]
-    service_capacity_depreciation: float = 0.07    # Annual depreciation of local service fleet/network without demand
-    service_capacity_accum_rate: float = 0.55      # Learning-by-doing & fleet build-up per share of land under trusteeship
-    service_maturity_cost_saving_max: float = 0.24 # Up to 24% lower mach_* fee at full contiguous network maturity
-    service_maturity_yield_gain_max: float = 0.032 # Jiang et al. (2024): +2.51%-3.40% grain technical efficiency gain
-    enable_performance_budget_linkage: bool = False  # 财农〔2023〕11/12号: annual clearing + next-yr performance factor [0.82, 1.18]
-
-    # 9. V2.1 Candidate Institutional Moderators: Village Collective Coordination & Order Grain Arrangement
     enable_village_coordination: bool = False      # Pools voluntarily released plots, cuts friction/fees, grain covenant
     village_friction_mult: float = 0.35            # 65% reduction in land matching friction via village transfer platform
     village_setup_fee_mult: float = 0.35           # Consolidated village contract setup fee reduction
-    village_contiguous_mach_saving: float = 0.08   # Luo (2017) 小田并大田 contiguous machinery service cost reduction
+    village_contiguous_mach_saving: float = 0.08   # Luo (2017) contiguous machinery service cost reduction
     village_grain_covenant_floor: float = 0.70     # 国办发〔2020〕44号 village-pooled anti-non-grain covenant
-    order_cap_yuan_per_mu: float = 95.0            # Order-grain contract fiscal budget cap per mu
-    order_max_price_bonus_ratio: float = 0.11      # Post-harvest procurement price bonus on verified marketed grain
-
-    # 10. V2.1 Coupled Natural-Social Signal Noise, Adverse Selection, Moral Hazard & Verification Governance
-    enable_asymmetric_info_and_verification: bool = False
-    idiosyncratic_env_noise_sd: float = 0.14       # Parcel/operator micro-climate & pest yield noise (widened in disasters)
-    disaster_noise_amp: float = 1.45               # Higher attribution noise when regional weather_mult < 1.0
-    base_audit_rate: float = 0.28                  # Baseline grassroots inspection coverage
-    local_audit_accuracy: float = 0.30             # Imperfect local inspection accuracy under environmental noise
-    cross_verify_enabled: bool = False             # Multi-source cross-verification (Beidou GNSS + contract + grain sales)
-    cross_verify_accuracy: float = 0.88            # High verification precision under digital/multi-source cross-check
-    clawback_fine_multiplier: float = 0.65         # Full clawback (1.0) + 65% penalty on detected overclaims/diversion
-    audit_admin_cost_share: float = 0.025          # Administrative cost of cross-verification as share of regional cap
+    order_cap_yuan_per_mu: float = 120.0           # Order-grain contract fiscal budget cap per mu
+    order_max_price_bonus_ratio: float = 0.13      # Post-harvest procurement price bonus (~0.35 CNY/kg in coast provinces)
 
     def lease_years_for_category(self, actor_category: str) -> int:
         if not self.enable_heterogeneous_lease_terms:
@@ -166,19 +146,17 @@ def default_v2_design() -> V2Design:
     return V2Design()
 
 
-def upgraded_v2_1_design() -> V2Design:
-    """Realistic V2.1 institutional & dynamic coupling configuration (preserving <=2010 calibration boundary)."""
+def clean_v2_2_design() -> V2Design:
+    """Clean zero-water V2.2 configuration: V2.0 economic core + <=2010 individual aging/exit + dual-track leases."""
     return V2Design(
-        id="NFPS600-Mesa-AgriABM-RL-v2.1",
+        id="NFPS600-Mesa-AgriABM-RL-v2.2-clean",
         enable_household_aging_and_exit_inertia=True,
         rent_offsets_subsistence_wedge=True,
         dynamic_expected_rent_update=True,
         allow_exit_entrust_nontrad=True,
         enable_heterogeneous_lease_terms=True,
-        enable_service_capacity_accumulation=True,
-        enable_performance_budget_linkage=True,
-        menu_mode="v2_1_portfolio",
+        menu_mode="v2_2_clean",
         fqi_discount_gamma=0.96,
-        gov_fiscal_cost_weight=0.12,
+        gov_fiscal_cost_weight=0.02,
         gov_rent_cap_penalty_weight=0.0,
     )

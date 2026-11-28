@@ -101,8 +101,6 @@ class ActorBlueprint:
     elderly_share_2010: float = 0.0
     migrant_days_2010: float = 0.0
     offfarm_income_share_2010: float = 0.0
-    is_opportunistic_type: bool = False
-    compliance_propensity: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -581,16 +579,7 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                     elderly_share_2010=round(elder_sh_10, 4),
                     migrant_days_2010=round(mig_days_10, 2),
                     offfarm_income_share_2010=round(off_inc_sh, 4),
-                    is_opportunistic_type=False,
-                    compliance_propensity=round(0.50 + 0.45 * ((row.Index * 7) % 11) / 10.0, 3)
-                    if design.enable_asymmetric_info_and_verification
-                    else 1.0,
                 )
-            )
-            p_qual = (
-                (0.85, 0.95, 1.05, 1.15)[row.Index % 4]
-                if design.enable_asymmetric_info_and_verification
-                else 1.0
             )
             parcel_list.extend(
                 _split_parcels_v2(
@@ -603,7 +592,7 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                     sow_food=float(row.sow_food),
                     sow_cash=float(row.sow_cash),
                     sow_total=float(row.sow_total),
-                    quality=p_qual,
+                    quality=1.0,
                     start_idx=len(parcel_list),
                 )
             )
@@ -724,47 +713,6 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
                             verified_tradable_mu=0.0,
                             admin_overhead_yuan=design.company_admin_overhead_yuan,
                             service_coord_saving=0.08,
-                            is_opportunistic_type=False,
-                            compliance_propensity=0.88 if design.enable_asymmetric_info_and_verification else 1.0,
-                        )
-                    )
-
-                # 4) Speculative/Opportunistic Scale Bidder when Asymmetric Information module is active
-                #    Lower true grain capability (0.82 * y_reg) + low signal fabrication cost ("垒大户套补/非粮化套利")
-                if design.enable_asymmetric_info_and_verification and sm_trad_mu >= 60.0:
-                    org_list.append(
-                        ActorBlueprint(
-                            id=f"SPEC_{reg_idx}_{sm}_{0}",
-                            region=reg_name,
-                            province=prov_rep,
-                            submarket=sm,
-                            actor_category="family_farm",
-                            is_survey_household=False,
-                            hh_members=2.0,
-                            workers=1.0,
-                            ag_days_year=180.0 * design.family_labor_scale,
-                            slack_ag_days_year=120.0 * design.family_labor_scale,
-                            offfarm_wage_day=round(0.50 * w_hire, 2),
-                            offfarm_annual_base=0.0,
-                            savings_stock=round(2.8 * wc_p85, 2),
-                            working_capital_init=round(2.5 * wc_p85 * design.working_cap_scale, 2),
-                            consumption_cash_base=10_000.0,
-                            subsistence_grain_kg=0.0,
-                            mci=round(mci_org, 3),
-                            grain_weights=w_tup,
-                            grain_yield_kg_sown_mu=round(0.82 * y_reg, 3),
-                            grain_price_yuan_kg=round(p_reg, 4),
-                            grain_non_mach_yuan_sown_mu=round(c_non_mach_reg, 2),
-                            grain_mach_yuan_sown_mu=round(c_mach_reg, 2),
-                            grain_labor_days_sown_mu=round(l_grain_reg, 2),
-                            ref_grain_share=round(max(0.38, 0.58 * base_g_share), 4),
-                            initial_cultivating=True,
-                            own_physical_mu=0.0,
-                            verified_tradable_mu=0.0,
-                            admin_overhead_yuan=0.0,
-                            service_coord_saving=0.0,
-                            is_opportunistic_type=True,
-                            compliance_propensity=0.22,
                         )
                     )
 
