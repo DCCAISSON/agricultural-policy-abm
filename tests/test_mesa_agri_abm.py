@@ -271,3 +271,43 @@ def test_v2_2_clean_baseline_village_coord_and_dual_track_leases():
     assert d22.lease_years_for_category("survey_household") == 1
     assert d22.lease_years_for_category("family_farm") == 3
     assert d22.lease_years_for_category("agri_company") == 4
+
+
+def test_interprovincial_order_arbitrage_conservation_and_verified_cap():
+    from mesa_agri_abm import clean_v2_2_design
+
+    d_base = clean_v2_2_design().with_overrides(enable_interprovincial_arbitrage=True)
+    d_loose = d_base.with_overrides(order_quota_mode="loose_area_quota")
+    d_ver = d_base.with_overrides(order_quota_mode="verified_grain_area_cap")
+
+    regs, meta = load_v2_calibrated_regions(PROJECT_ROOT, d_base)
+    assert "浙江" in meta["prov_border_grain_prices_2024"] and "江西" in meta["prov_border_grain_prices_2024"]
+
+    east_order = (("order_farming", 75_000), ("none", 0), ("none", 0), ("none", 0))
+    m_loose = AgriSuccessionMesaModel(574001, regs, d_loose, policy_mode="fixed", fixed_action_idx=28)
+    m_ver = AgriSuccessionMesaModel(574001, regs, d_ver, policy_mode="fixed", fixed_action_idx=28)
+
+    arb_loose_kg, arb_ver_kg = 0.0, 0.0
+    leak_loose, leak_ver = 0.0, 0.0
+    east_grain_loose, east_grain_ver = 0.0, 0.0
+    for _ in range(4):
+        jl, rl, _ = m_loose.step(explicit_joint_action=east_order)
+        jv, rv, _ = m_ver.step(explicit_joint_action=east_order)
+        assert isclose(jl["bilateral_conservation_gap_kg"], 0.0, abs_tol=1e-6)
+        assert isclose(jv["bilateral_conservation_gap_kg"], 0.0, abs_tol=1e-6)
+        assert jl["central_surplus_pool_deducted_kg"] <= jl["central_surplus_pool_initial_kg"] + 1e-4
+        assert jv["central_surplus_pool_deducted_kg"] <= jv["central_surplus_pool_initial_kg"] + 1e-4
+        assert jl["spending"] <= 150_000.0 + 1e-2
+        assert jv["spending"] <= 150_000.0 + 1e-2
+        arb_loose_kg += jl["interprov_arbitrage_grain_kg"]
+        arb_ver_kg += jv["interprov_arbitrage_grain_kg"]
+        leak_loose += jl["interprov_arbitrage_subsidy_leakage_yuan"]
+        leak_ver += jv["interprov_arbitrage_subsidy_leakage_yuan"]
+        east_grain_loose += rl[0]["grain_kg"]
+        east_grain_ver += rv[0]["grain_kg"]
+
+    # Endogenous arbitrage & fiscal leakage drop dramatically under verified sown-grain cap without hacks
+    assert arb_loose_kg > 10_000.0
+    assert arb_ver_kg < arb_loose_kg * 0.5
+    assert leak_ver < leak_loose * 0.5
+    assert east_grain_ver > east_grain_loose

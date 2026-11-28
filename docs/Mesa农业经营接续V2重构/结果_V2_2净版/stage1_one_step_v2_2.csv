@@ -1,0 +1,6 @@
+arm,seed,year,comparable_n,survey_sown,sim_sown,survey_mixed,sim_mixed,survey_grain_mu_seasons,sim_grain_mu_seasons,survey_grain_tons,sim_grain_tons,participation_err_pp,mixed_err_pp,grain_share_q_mae,grain_mu_rel_err
+v2_2_one_step,0,2011,569,539,554,293,297,5179.3,5105.23,2143.36,2074.9,0.0264,0.007,0.0537,0.0143
+v2_2_one_step,0,2012,533,495,511,261,272,4706.4,4617.31,2179.03,1903.43,0.03,0.0206,0.0437,0.0189
+v2_2_one_step,0,2013,537,474,510,255,268,4383.0,4578.48,1935.32,1880.9,0.067,0.0242,0.0774,0.0446
+v2_2_one_step,0,2014,532,449,501,234,256,4822.1,4417.76,2353.28,1813.08,0.0977,0.0414,0.06,0.0839
+v2_2_one_step,0,2015,534,445,489,207,248,5017.7,4497.71,2381.24,1844.27,0.0824,0.0768,0.0706,0.1036

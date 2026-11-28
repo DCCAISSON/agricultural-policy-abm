@@ -1,0 +1,7 @@
+{
+  "design_id": "NFPS600-Mesa-AgriABM-RL-v2.2-clean",
+  "elapsed_seconds": 4871.54,
+  "n_eval_seeds": 48,
+  "best_uniform_fixed_idx": 28,
+  "best_regional_fixed_idx": 26
+}

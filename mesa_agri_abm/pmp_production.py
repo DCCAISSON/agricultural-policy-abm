@@ -10,7 +10,12 @@ Combines <0.05 ms piecewise-exact KKT solution with:
 from dataclasses import dataclass
 from math import fsum
 
-from mesa_agri_abm.calibration import ActorBlueprint, NAMED_GRAINS, RegionTechV2
+from mesa_agri_abm.calibration import (
+    ADJACENT_SURPLUS_PROVINCES,
+    ActorBlueprint,
+    NAMED_GRAINS,
+    RegionTechV2,
+)
 from mesa_agri_abm.config import V2Design
 
 
@@ -27,6 +32,7 @@ class SubsidySchedule:
     order_price_bonus_yuan_kg: float = 0.0
     village_pooled_saving: float = 0.0
     grain_covenant_floor: float = 0.0
+    prov_border_prices: tuple[tuple[int, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +61,12 @@ class PMPPlanV2:
     net_upfront_cash_needed: float
     net_economic_surplus_yuan: float
     order_subsidy_yuan: float = 0.0
+    order_quota_kg: float = 0.0
+    order_own_subsidy_yuan: float = 0.0
+    order_arb_subsidy_yuan: float = 0.0
+    planned_arbitrage_grain_kg: float = 0.0
+    arb_wc_max_kg: float = 0.0
+    arb_sell_minus_buy_yuan_kg: float = 0.0
 
 
 def eligible_subsidized_grain_phys_mu(
@@ -196,6 +208,27 @@ def solve_actor_pmp_v2(
     is_post_cash = sched.instrument in ("producer_post", "scale_takeover_post")
     is_order_pol = sched.instrument == "order_farming" and sched.order_price_bonus_yuan_kg > 0.0
 
+    # Endogenous cross-province order-grain arbitrage parameters (active only when switch enabled & bordering deficit province)
+    arb_buy_unit_cost = 0.0
+    arb_sell_base_price = p_g
+    arb_sell_minus_buy = 0.0
+    arb_unit_margin = 0.0
+    arb_active = False
+    if design.enable_interprovincial_arbitrage and is_order_pol and actor.province in ADJACENT_SURPLUS_PROVINCES:
+        p_b_map = dict(sched.prov_border_prices)
+        adj_p = [p_b_map[sp] for sp in ADJACENT_SURPLUS_PROVINCES[actor.province] if sp in p_b_map]
+        if adj_p and actor.province in p_b_map:
+            p_s_min = min(adj_p)
+            arb_buy_unit_cost = (
+                p_s_min
+                + design.interprov_transport_cost_yuan_kg
+                + design.interprov_brokerage_friction_yuan_kg
+            )
+            arb_sell_base_price = p_b_map[actor.province]
+            arb_sell_minus_buy = arb_sell_base_price - arb_buy_unit_cost
+            arb_unit_margin = max(0.0, arb_sell_minus_buy + sched.order_price_bonus_yuan_kg)
+            arb_active = arb_unit_margin > 1e-6
+
     if sched.instrument.startswith("producer_"):
         marg_sub_phys = sched.rate_per_phys_mu
     elif sched.instrument.startswith("scale_takeover_"):
@@ -203,7 +236,8 @@ def solve_actor_pmp_v2(
     else:
         marg_sub_phys = 0.0
 
-    order_bonus_sown = min(y_g * sched.order_price_bonus_yuan_kg, sched.rate_per_phys_mu / max(1.0, mci)) if is_order_pol else 0.0
+    cap_kg_per_sown = min(y_g, design.order_verified_cap_kg_per_sown_mu) if (is_order_pol and design.order_quota_mode == "verified_grain_area_cap") else y_g
+    order_bonus_sown = min(cap_kg_per_sown * sched.order_price_bonus_yuan_kg, sched.rate_per_phys_mu / max(1.0, mci)) if is_order_pol else 0.0
     sub_sown_g = marg_sub_phys / mci + order_bonus_sown
     pre_sown_g = (marg_sub_phys / mci) if is_pre_cash else 0.0
 
@@ -217,13 +251,26 @@ def solve_actor_pmp_v2(
     gamma_pmp = max(1.0, design.pmp_gamma_yuan_per_sown_mu)
     th_floor = sched.grain_covenant_floor if (not actor.is_survey_household or tk_share > 0.5) else 0.0
 
-    # Analytical KKT candidate crop shares across the 3 labor regimes + corners + liquidity/threshold kinks
+    # Analytical KKT candidate crop shares across the 3 labor regimes + corners + liquidity/quota kinks
     cand_thetas: set[float] = {max(th_floor, 0.0), 1.0, max(th_floor, r_anchor)}
     for w_sh in (w_res, w_comp, w_hire):
         pi_g = rev_g + sub_wedge_bonus + sub_sown_g - c_g - w_sh * l_g
         pi_c = rev_c - c_c - w_sh * l_c - tech.baseline_margin_gap
         th = r_anchor + (pi_g - pi_c) / gamma_pmp
         cand_thetas.add(min(1.0, max(th_floor, th)))
+        if arb_active and design.order_quota_mode == "loose_area_quota":
+            # Exact FOC when own grain displaces unused loose quota filled by neighboring-province arbitrage
+            pi_g_crowd = rev_g + sub_wedge_bonus + sub_sown_g - arb_unit_margin * y_g - c_g - w_sh * l_g
+            th_crowd = r_anchor + (pi_g_crowd - pi_c) / gamma_pmp
+            cand_thetas.add(min(1.0, max(th_floor, th_crowd)))
+    if arb_active and design.order_quota_mode == "loose_area_quota" and s_max > 1e-6:
+        max_loose_q = min(
+            operated_phys_mu * design.order_loose_quota_kg_per_phys_mu,
+            (operated_phys_mu * sched.rate_per_phys_mu) / max(1e-9, sched.order_price_bonus_yuan_kg),
+        )
+        sub_base = actor.subsistence_grain_kg if (design.enable_subsistence_grain_split and actor.is_survey_household) else 0.0
+        th_q = (max_loose_q + sub_base) / max(1e-9, s_max * y_g)
+        cand_thetas.add(min(1.0, max(th_floor, th_q)))
 
     if sched.instrument.startswith("scale_takeover_") and operated_phys_mu >= sched.scale_threshold_mu:
         cand_thetas.add(min(1.0, max(th_floor, sched.scale_threshold_mu / operated_phys_mu)))
@@ -359,14 +406,53 @@ def solve_actor_pmp_v2(
                 mkt_kg = exp_grain_kg
                 staple_penalty = 0.0
 
-            order_sub = min(mkt_kg * sched.order_price_bonus_yuan_kg, phys_g * sched.rate_per_phys_mu) if is_order_pol else 0.0
+            if is_order_pol:
+                b_ord = sched.order_price_bonus_yuan_kg
+                if design.enable_interprovincial_arbitrage:
+                    if design.order_quota_mode == "loose_area_quota":
+                        max_fisc_kg = (operated_phys_mu * sched.rate_per_phys_mu) / max(1e-9, b_ord)
+                        order_quota_kg = min(operated_phys_mu * design.order_loose_quota_kg_per_phys_mu, max_fisc_kg)
+                    else:
+                        max_fisc_kg = (phys_g * sched.rate_per_phys_mu) / max(1e-9, b_ord)
+                        order_quota_kg = min(xg * design.order_verified_cap_kg_per_sown_mu, max_fisc_kg)
+                    own_order_kg = min(mkt_kg, order_quota_kg)
+                    unused_quota_kg = max(0.0, order_quota_kg - own_order_kg)
+                    wc_free_arb = max(0.0, working_cap_avail - upfront_need)
+                    arb_wc_max = (
+                        wc_free_arb / max(0.2, design.arbitrage_working_cap_turnover_share * arb_buy_unit_cost)
+                        if arb_active
+                        else 0.0
+                    )
+                    arb_kg = min(unused_quota_kg, arb_wc_max) if (arb_active and unused_quota_kg > 1e-6) else 0.0
+                    own_order_sub = own_order_kg * b_ord
+                    arb_order_sub = arb_kg * b_ord
+                    order_sub = own_order_sub + arb_order_sub
+                    # arb_net_profit = arb_kg * ((sell_base + b_ord) - buy_cost) already includes arb_order_sub
+                    arb_net_profit = arb_kg * arb_unit_margin
+                else:
+                    order_quota_kg = phys_g * (sched.rate_per_phys_mu / max(1e-9, b_ord))
+                    own_order_sub = min(mkt_kg * b_ord, phys_g * sched.rate_per_phys_mu)
+                    arb_order_sub = 0.0
+                    order_sub = own_order_sub
+                    arb_kg = 0.0
+                    arb_wc_max = 0.0
+                    arb_net_profit = 0.0
+            else:
+                order_quota_kg = 0.0
+                own_order_sub = 0.0
+                arb_order_sub = 0.0
+                order_sub = 0.0
+                arb_kg = 0.0
+                arb_wc_max = 0.0
+                arb_net_profit = 0.0
 
             surplus = (
                 exp_grain_kg * p_g
                 + exp_cash_rev
                 + pre_sub
                 + post_sub
-                + order_sub
+                + own_order_sub
+                + arb_net_profit
                 - non_mach_cost
                 - net_mach_cost
                 - hired_cost
@@ -407,6 +493,12 @@ def solve_actor_pmp_v2(
                     net_upfront_cash_needed=max(0.0, non_mach_cost + net_mach_cost + design.upfront_hired_cash_share * hired_cost - pre_sub),
                     net_economic_surplus_yuan=surplus,
                     order_subsidy_yuan=order_sub,
+                    order_quota_kg=order_quota_kg,
+                    order_own_subsidy_yuan=own_order_sub,
+                    order_arb_subsidy_yuan=arb_order_sub,
+                    planned_arbitrage_grain_kg=arb_kg,
+                    arb_wc_max_kg=arb_wc_max,
+                    arb_sell_minus_buy_yuan_kg=arb_sell_minus_buy,
                 )
 
     return best_plan
@@ -448,6 +540,7 @@ def compute_shadow_land_bid_v2(
             order_price_bonus_yuan_kg=sched.order_price_bonus_yuan_kg,
             village_pooled_saving=sched.village_pooled_saving,
             grain_covenant_floor=sched.grain_covenant_floor,
+            prov_border_prices=sched.prov_border_prices,
         )
 
     p0 = (

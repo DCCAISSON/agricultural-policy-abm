@@ -17,7 +17,13 @@ from mesa_agri_abm.agents import (
     ScaleOrgMesaAgent,
     build_operator_agent,
 )
-from mesa_agri_abm.calibration import CalibratedRegionV2, NAMED_GRAINS, ParcelBlueprint
+from mesa_agri_abm.calibration import (
+    ADJACENT_SURPLUS_PROVINCES,
+    CalibratedRegionV2,
+    NAMED_GRAINS,
+    PROVINCE_NAMES,
+    ParcelBlueprint,
+)
 from mesa_agri_abm.config import V2Design
 from mesa_agri_abm.pmp_production import (
     PMPPlanV2,
@@ -266,6 +272,9 @@ class RegionalSubEconomy:
         self.last_parcel_rents: dict[str, tuple[float, float]] = {}
         self.last_parcel_rows: list[dict] = []
         self.last_actor_rows: list[dict] = []
+        self.last_order_claims: dict[str, dict] = {}
+        self.last_order_rate_per_mu: float = 0.0
+        self.last_order_bonus_kg: float = 0.0
 
     def public_feature_list(self, design: V2Design) -> list[float]:
         obs = self.observed
@@ -308,12 +317,16 @@ class RegionalSubEconomy:
         other.last_parcel_rents = self.last_parcel_rents.copy()
         other.last_parcel_rows = []
         other.last_actor_rows = []
+        other.last_order_claims = {}
+        other.last_order_rate_per_mu = 0.0
+        other.last_order_bonus_kg = 0.0
         return other
 
     def build_schedule(self, instrument: str, budget_cap: float, design: V2Design) -> SubsidySchedule:
         thresh = design.scale_threshold_for(self.name)
         v_sav = design.village_contiguous_mach_saving if design.enable_village_coordination else 0.0
         g_cov = design.village_grain_covenant_floor if design.enable_village_coordination else 0.0
+        p_b_tup = self.tech.prov_border_grain_prices if design.enable_interprovincial_arbitrage else ()
 
         if instrument == "none" or budget_cap <= 0.0:
             return SubsidySchedule(
@@ -326,6 +339,7 @@ class RegionalSubEconomy:
                 order_price_bonus_yuan_kg=0.0,
                 village_pooled_saving=v_sav,
                 grain_covenant_floor=g_cov,
+                prov_border_prices=p_b_tup,
             )
         order_bonus = 0.0
         if instrument.startswith("producer_"):
@@ -358,6 +372,7 @@ class RegionalSubEconomy:
             order_price_bonus_yuan_kg=order_bonus,
             village_pooled_saving=v_sav,
             grain_covenant_floor=g_cov,
+            prov_border_prices=p_b_tup,
         )
 
     def step_region(
@@ -779,6 +794,7 @@ class RegionalSubEconomy:
                     ),
                     village_pooled_saving=sched_eff.village_pooled_saving,
                     grain_covenant_floor=sched_eff.grain_covenant_floor,
+                    prov_border_prices=sched_eff.prov_border_prices,
                 )
                 plans, raw_claim_total = solve_all_operators(sched_eff)
 
@@ -956,6 +972,7 @@ class RegionalSubEconomy:
         survey_cultivating_count = 0
         survey_mixed_count = 0
         tight_liq_count = 0
+        order_claims: dict[str, dict] = {}
 
         for aid in actor_ids:
             op = self.operators[aid]
@@ -1016,11 +1033,17 @@ class RegionalSubEconomy:
             if op_phys_mu[aid] > 0.5 and pl.planted_physical_mu < 0.92 * op_phys_mu[aid]:
                 tight_liq_count += 1
 
+            arb_trade_spread = (
+                pl.planned_arbitrage_grain_kg * pl.arb_sell_minus_buy_yuan_kg
+                if design.enable_interprovincial_arbitrage and sched_eff.instrument == "order_farming"
+                else 0.0
+            )
             autumn_hired_rem = (1.0 - design.upfront_hired_cash_share) * pl.hired_cost_yuan
             autumn_cash_inflow = (
                 grain_cash_sales
                 + realized_cash_crop_rev
                 + post_cash_sub_realized
+                + arb_trade_spread
                 + wage_earned
                 - autumn_hired_rem
                 - op.bp.admin_overhead_yuan
@@ -1034,6 +1057,7 @@ class RegionalSubEconomy:
                 + realized_cash_crop_rev
                 + pre_cash_sub_realized
                 + post_cash_sub_realized
+                + arb_trade_spread
                 + fert_inc
                 + wage_earned
                 + rent_income[aid]
@@ -1111,6 +1135,16 @@ class RegionalSubEconomy:
                 "wealth_end": round(wealth_next, 2),
             }
             op.last_year_summary = rec_summary
+            if design.enable_interprovincial_arbitrage and sched_eff.instrument == "order_farming":
+                order_claims[aid] = {
+                    "order_quota_kg": pl.order_quota_kg,
+                    "mkt_kg": mkt_kg,
+                    "arb_wc_max_kg": pl.arb_wc_max_kg,
+                    "b_ord": sched_eff.order_price_bonus_yuan_kg,
+                    "sell_minus_buy": pl.arb_sell_minus_buy_yuan_kg,
+                    "planned_arb_kg": pl.planned_arbitrage_grain_kg,
+                    "credited_sub": sup_inc,
+                }
             if collect_micro_ledger:
                 actor_rows.append(rec_summary)
 
@@ -1122,6 +1156,9 @@ class RegionalSubEconomy:
         self.last_parcel_rents = parcel_rents_now
         self.last_parcel_rows = parcel_rows
         self.last_actor_rows = actor_rows
+        self.last_order_claims = order_claims
+        self.last_order_rate_per_mu = sched_eff.rate_per_phys_mu
+        self.last_order_bonus_kg = sched_eff.order_price_bonus_yuan_kg
 
         total_grain_phys_mu = fate_incumbent_grain_mu + fate_strict_succession_grain_mu + fate_expanded_grain_mu
         total_cash_phys_mu = fate_leased_cash_mu + fate_own_cash_mu
@@ -1303,6 +1340,7 @@ class AgriSuccessionMesaModel(mesa.Model):
         self.last_region_summaries: tuple[dict, ...] = ()
         self.history_joint: list[dict] = []
         self.history_regions: list[dict] = []
+        self.last_interprov_pair_flows: dict[str, float] = {}
 
         self.datacollector = mesa.DataCollector(
             model_reporters={
@@ -1335,6 +1373,7 @@ class AgriSuccessionMesaModel(mesa.Model):
         clone.last_region_summaries = self.last_region_summaries
         clone.history_joint = list(self.history_joint)
         clone.history_regions = list(self.history_regions)
+        clone.last_interprov_pair_flows = self.last_interprov_pair_flows.copy()
         clone.datacollector = mesa.DataCollector(
             model_reporters=self.datacollector.model_reporters
         )
@@ -1438,7 +1477,128 @@ class AgriSuccessionMesaModel(mesa.Model):
         tot_res = fsum(r["reservation"] for r in reg_rows)
         tot_comm = fsum(r["committed"] for r in reg_rows)
         tot_spend = fsum(r["spending"] for r in reg_rows)
+
+        interprov_arb_kg = 0.0
+        interprov_arb_sub_leak_yuan = 0.0
+        local_order_sub_yuan = 0.0
+        surplus_pool_init_kg = 0.0
+        surplus_pool_ded_kg = 0.0
+        bilateral_gap_kg = 0.0
+        pair_flows_now: dict[str, float] = {}
+
+        if self.design.enable_interprovincial_arbitrage:
+            national_grain_before = fsum(r["grain_kg"] for r in reg_rows)
+            p_b_map = dict(self.regions[0].tech.prov_border_grain_prices)
+            surplus_provs = sorted(
+                {sp for sp_list in ADJACENT_SURPLUS_PROVINCES.values() for sp in sp_list} | {42}
+            )
+            initial_surplus_pool: dict[int, float] = {sp: 0.0 for sp in surplus_provs}
+            for reg_s in self.regions:
+                if reg_s.name == "东部":
+                    continue
+                for op_s in reg_s.operators.values():
+                    if op_s.province in initial_surplus_pool:
+                        initial_surplus_pool[op_s.province] += max(
+                            0.0, float(op_s.last_year_summary.get("marketed_grain_kg", 0.0))
+                        )
+            surplus_pool = initial_surplus_pool.copy()
+            surplus_deducted: dict[int, float] = {sp: 0.0 for sp in surplus_provs}
+            bought_by_deficit: dict[int, float] = defaultdict(float)
+
+            for r_i, (reg, (inst, cap)) in enumerate(zip(self.regions, eff_joint_act, strict=True)):
+                if inst != "order_farming" or cap <= 0.0 or not reg.last_order_claims:
+                    continue
+                op_settlement: list[tuple[str, float, float, float, dict]] = []
+                for aid in sorted(reg.last_order_claims):
+                    ctx = reg.last_order_claims[aid]
+                    op = reg.operators[aid]
+                    q_quota = float(ctx["order_quota_kg"])
+                    mkt_kg = float(ctx["mkt_kg"])
+                    b_ord = float(ctx["b_ord"])
+                    own_kg = min(mkt_kg, q_quota)
+                    exec_arb_kg = 0.0
+                    if (
+                        op.province in ADJACENT_SURPLUS_PROVINCES
+                        and b_ord > 0.0
+                        and (b_ord + float(ctx["sell_minus_buy"])) > 1e-6
+                    ):
+                        unused_q = max(0.0, q_quota - own_kg)
+                        req_kg = min(unused_q, float(ctx["arb_wc_max_kg"]))
+                        if req_kg > 1e-6:
+                            adj_sorted = sorted(
+                                [sp for sp in ADJACENT_SURPLUS_PROVINCES[op.province] if sp in surplus_pool],
+                                key=lambda sp: p_b_map.get(sp, 99.0),
+                            )
+                            rem_req = req_kg
+                            for sp in adj_sorted:
+                                avail = surplus_pool[sp]
+                                if avail <= 1e-9 or rem_req <= 1e-9:
+                                    continue
+                                take = min(rem_req, avail)
+                                surplus_pool[sp] -= take
+                                surplus_deducted[sp] += take
+                                bought_by_deficit[op.province] += take
+                                exec_arb_kg += take
+                                rem_req -= take
+                                p_key = f"{PROVINCE_NAMES.get(op.province, op.province)}<-{PROVINCE_NAMES.get(sp, sp)}"
+                                pair_flows_now[p_key] = pair_flows_now.get(p_key, 0.0) + take
+                    claim_own = own_kg * b_ord
+                    claim_arb = exec_arb_kg * b_ord
+                    op_settlement.append((aid, own_kg, exec_arb_kg, claim_own + claim_arb, ctx, claim_own, claim_arb))
+
+                reg_claim_tot = fsum(item[3] for item in op_settlement)
+                reg_res_cap = float(reg_rows[r_i]["reservation"])
+                scale_sub = min(1.0, reg_res_cap / reg_claim_tot) if reg_claim_tot > reg_res_cap + 1e-7 else 1.0
+                reg_new_spend = 0.0
+                for aid, own_kg, exec_arb_kg, tot_c, ctx, c_own, c_arb in op_settlement:
+                    real_own_sub = c_own * scale_sub
+                    real_arb_sub = c_arb * scale_sub
+                    real_sub = real_own_sub + real_arb_sub
+                    reg_new_spend += real_sub
+                    local_order_sub_yuan += real_own_sub
+                    interprov_arb_sub_leak_yuan += real_arb_sub
+                    interprov_arb_kg += exec_arb_kg
+
+                    op = reg.operators[aid]
+                    delta_cash = (real_sub - float(ctx["credited_sub"])) + (
+                        (exec_arb_kg - float(ctx["planned_arb_kg"])) * float(ctx["sell_minus_buy"])
+                    )
+                    if abs(delta_cash) > 1e-6:
+                        if delta_cash >= 0.0:
+                            op.working_cap += self.design.surplus_to_working_cap_rate * delta_cash
+                            op.wealth += (1.0 - self.design.surplus_to_working_cap_rate) * delta_cash
+                        else:
+                            draw = min(op.wealth, -delta_cash)
+                            op.wealth -= draw
+                            op.working_cap = max(self.design.working_cap_Min_buffer_yuan * 0.4, op.working_cap - ((-delta_cash) - draw))
+
+                assert reg_new_spend <= reg_res_cap + 1e-4
+                reg_rows[r_i]["spending"] = round(reg_new_spend, 4)
+                reg_rows[r_i]["committed"] = round(max(float(reg_rows[r_i]["committed"]), reg_new_spend), 4)
+
+            tot_bought_kg = fsum(bought_by_deficit.values())
+            tot_deducted_kg = fsum(surplus_deducted.values())
+            bilateral_gap_kg = tot_bought_kg - tot_deducted_kg
+            surplus_pool_init_kg = fsum(initial_surplus_pool.values())
+            surplus_pool_ded_kg = tot_deducted_kg
+
+            # MANDATORY BILATERAL PHYSICAL CONSERVATION ASSERTIONS
+            assert isclose(tot_bought_kg, tot_deducted_kg, rel_tol=1e-9, abs_tol=1e-6), (
+                f"Bilateral conservation violated: bought={tot_bought_kg} != deducted={tot_deducted_kg}"
+            )
+            for sp, ded in surplus_deducted.items():
+                assert -1e-9 <= ded <= initial_surplus_pool[sp] + 1e-6, (
+                    f"Surplus pool overdraw in prov {sp}: ded={ded} > init={initial_surplus_pool[sp]}"
+                )
+            assert isclose(fsum(r["grain_kg"] for r in reg_rows), national_grain_before, rel_tol=1e-9, abs_tol=1e-6), (
+                "Interprovincial trade must never alter physical harvested grain output"
+            )
+
+            tot_comm = fsum(r["committed"] for r in reg_rows)
+            tot_spend = fsum(r["spending"] for r in reg_rows)
+
         assert tot_spend <= tot_comm + 1e-3 <= max(tot_res, float(self.design.annual_common_budget_yuan)) + 1e-2
+        self.last_interprov_pair_flows = pair_flows_now
 
         tot_leased = fsum(r["leased_area_mu"] for r in reg_rows)
         tot_rent = fsum(r["total_rent_yuan"] for r in reg_rows)
@@ -1497,6 +1657,12 @@ class AgriSuccessionMesaModel(mesa.Model):
             "cohort_retained_same_op_mu": round(fsum(r["cohort_retained_same_op_mu"] for r in reg_rows), 4),
             "cohort_still_grain_mu": round(fsum(r["cohort_still_grain_mu"] for r in reg_rows), 4),
             "cohort_grain_kg": round(fsum(r["cohort_grain_kg"] for r in reg_rows), 4),
+            "interprov_arbitrage_grain_kg": round(interprov_arb_kg, 4),
+            "interprov_arbitrage_subsidy_leakage_yuan": round(interprov_arb_sub_leak_yuan, 4),
+            "local_verified_order_subsidy_yuan": round(local_order_sub_yuan, 4),
+            "central_surplus_pool_initial_kg": round(surplus_pool_init_kg, 4),
+            "central_surplus_pool_deducted_kg": round(surplus_pool_ded_kg, 4),
+            "bilateral_conservation_gap_kg": round(bilateral_gap_kg, 8),
         }
 
         self.last_joint_summary = joint_summary

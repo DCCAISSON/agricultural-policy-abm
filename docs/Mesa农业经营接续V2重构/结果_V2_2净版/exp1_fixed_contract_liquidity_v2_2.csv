@@ -1,0 +1,6 @@
+instrument,fixed_contract_grain_gain_tons,fixed_contract_ci95,market_reallocation_grain_gain_tons,market_reallocation_ci95,total_endogenous_grain_gain_tons,total_endogenous_ci95,endogenous_spending_wan,endogenous_fungible_rent_diff_wan,legacy_rent_ban_rent_diff_wan,strict_succession_diff_mu_yr
+producer_pre,329.359,"[325.11, 333.61]",145.594,"[136.89, 154.30]",474.953,"[464.28, 485.62]",119.624,-12.2425,-21.6581,-33.88
+producer_post,316.968,"[312.83, 321.11]",167.415,"[159.16, 175.67]",484.383,"[474.05, 494.71]",119.654,-18.0439,-18.0439,-41.65
+scale_takeover_pre,57.995,"[55.63, 60.36]",82.413,"[73.70, 91.12]",140.408,"[131.43, 149.39]",87.056,30.9151,26.1074,-34.78
+scale_takeover_post,59.243,"[56.87, 61.61]",64.974,"[56.57, 73.38]",124.217,"[115.49, 132.94]",86.037,26.0991,26.0991,-41.62
+service_trusteeship,279.522,"[275.64, 283.40]",153.881,"[146.31, 161.45]",433.403,"[424.41, 442.40]",95.179,-0.8794,-0.8794,-7.65

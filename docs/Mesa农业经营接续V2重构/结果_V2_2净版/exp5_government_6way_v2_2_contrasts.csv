@@ -1,0 +1,6 @@
+contrast,grain_8yr_diff_tons,grain_ci95,spending_8yr_diff_wan,spending_ci95,withdrawal_diff_tons,withdrawal_ci95
+gov_rl_minus_p0,549.55,"[538.46, 560.64]",115.883,"[115.665, 116.102]",90.79,"[86.98, 94.61]"
+gov_rl_minus_uniform_fixed,37.47,"[28.22, 46.71]",-3.56,"[-3.774, -3.345]",-3.66,"[-7.89, 0.57]"
+gov_rl_minus_regional_fixed,4.02,"[-2.69, 10.73]",1.868,"[1.647, 2.090]",-0.0,"[-2.63, 2.63]"
+gov_rl_minus_transparent_rule,265.14,"[251.52, 278.76]",11.83,"[11.253, 12.406]",37.8,"[34.06, 41.55]"
+gov_rl_minus_myopic,-2.5,"[-6.08, 1.08]",-0.153,"[-0.474, 0.168]",-1.96,"[-3.92, 0.01]"

@@ -1,12 +1,12 @@
-"""Central Government 25-Action Shared Fiscal Authority & 6-Way Policy Solver (V2).
+"""Central Government Shared Fiscal Authority & 6-Way Policy Solver (V2 / V2.2).
 
 Implements fair same-environment, same-budget, same-lagged-information comparison across:
 1. `p0`: Baseline institutional environment (background fertility protection only, zero incremental budget)
 2. `uniform_fixed`: Best national uniform-instrument area-proportional policy (selected on dev seeds)
 3. `regional_fixed`: Best regionally differentiated/tilted fixed policy (selected on dev seeds)
 4. `transparent_rule`: Explicit zero-black-box domain-expert dynamic rule
-5. `myopic`: Same 21-dim lagged public state & 96 training rollouts, gamma = 0 (single-year horizon)
-6. `gov_rl`: Finite-horizon Backward Ridge-Regularized Fitted Q-Iteration (gamma = 1, 8-year horizon)
+5. `myopic`: Same lagged public state (17-dim in V2.2 30-Action clean menu; 21-dim in legacy V2.0 menu) & disjoint train seeds, gamma = 0 (single-year horizon)
+6. `gov_rl`: Finite-horizon Backward Ridge-Regularized Fitted Q-Iteration (gamma = 0.96 in V2.2 32 train seeds; 8-year horizon)
 """
 
 from concurrent.futures import ProcessPoolExecutor
@@ -247,7 +247,7 @@ def select_dev_fixed_policies(
     *,
     max_workers: int | None = None,
 ) -> dict:
-    """Evaluate all 25 fixed menu actions strictly on `dev_seeds` to lock `uniform_fixed` and `regional_fixed`."""
+    """Evaluate all menu actions strictly on `dev_seeds` to lock `uniform_fixed` and `regional_fixed`."""
     probe = AgriSuccessionMesaModel(dev_seeds[0], calibrated_regions, design)
     tasks = [(a_idx, str(probe.menu[a_idx]), dev_seeds, calibrated_regions, design) for a_idx in range(len(probe.menu))]
     workers = max_workers if max_workers is not None else min(8, max(1, (os.cpu_count() or 4) - 2))

@@ -29,6 +29,25 @@ NFPS_GRAIN_TAG_MAP: dict[str, tuple[str, ...]] = {
     "soybean": ("s",),
     "other_grain": ("t", "o"),
 }
+PROVINCE_NAMES: dict[int, str] = {
+    11: "北京", 12: "天津", 13: "河北", 14: "山西", 15: "内蒙古",
+    21: "辽宁", 22: "吉林", 23: "黑龙江", 31: "上海", 32: "江苏",
+    33: "浙江", 34: "安徽", 35: "福建", 36: "江西", 37: "山东",
+    41: "河南", 42: "湖北", 43: "湖南", 44: "广东", 45: "广西",
+    46: "海南", 51: "四川", 52: "贵州", 53: "云南", 61: "陕西",
+    62: "甘肃", 63: "青海", 64: "宁夏", 65: "新疆",
+}
+# Real bordering deficit -> surplus province corridors within the 600-household cohort
+ADJACENT_SURPLUS_PROVINCES: dict[int, tuple[int, ...]] = {
+    33: (36, 34),  # 浙江 (7 hh) <- 江西 (28 hh), 安徽 (43 hh)
+    35: (36,),     # 福建 (23 hh) <- 江西 (28 hh)
+    32: (34,),     # 江苏 (25 hh) <- 安徽 (43 hh)
+    44: (36, 43),  # 广东 (22 hh) <- 江西 (28 hh), 湖南 (10 hh)
+    13: (41,),     # 河北 (29 hh) <- 河南 (33 hh)
+    37: (41,),     # 山东 (12 hh) <- 河南 (33 hh)
+}
+_SOUTHERN_RICE_BORDER_PROVS: frozenset[int] = frozenset({32, 33, 34, 35, 36, 42, 43, 44})
+_NORTHERN_WHEAT_BORDER_PROVS: frozenset[int] = frozenset({13, 37, 41})
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +83,7 @@ class RegionTechV2:
     turnover_pool_share: float
     scale_pool_share: float
     village_net_inflow_rate: float
+    prov_border_grain_prices: tuple[tuple[int, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +296,25 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
         + df0910["inc_govern_5"].fillna(0.0)
     ) * cpi_mult
 
+    # Same-crop provincial 2009-2010 CPI-2024 median farmgate prices (strictly year <= 2010)
+    prov_border_prices: dict[int, float] = {}
+    for p_code in sorted(prov_to_region):
+        g_p = df0910.loc[df0910["smgen"].eq(p_code)]
+        if p_code in _SOUTHERN_RICE_BORDER_PROVS:
+            vr = g_p.loc[(g_p["sow_r"].fillna(0.0) >= 0.5) & (g_p["prod_r"].fillna(0.0) > 0) & (g_p["inc_r"].fillna(0.0) > 0)]
+            if len(vr) >= 40:
+                prov_border_prices[int(p_code)] = round(float(((vr["inc_r"] * vr["cpi"]) / vr["prod_r"]).median()), 4)
+                continue
+        if p_code in _NORTHERN_WHEAT_BORDER_PROVS:
+            vw = g_p.loc[(g_p["sow_w"].fillna(0.0) >= 0.5) & (g_p["prod_w"].fillna(0.0) > 0) & (g_p["inc_w"].fillna(0.0) > 0)]
+            if len(vw) >= 40:
+                prov_border_prices[int(p_code)] = round(float(((vw["inc_w"] * vw["cpi"]) / vw["prod_w"]).median()), 4)
+                continue
+        vp = g_p.loc[(g_p["g_sow"] >= 0.5) & (g_p["g_prod"] > 0) & (g_p["g_rev"] > 0)]
+        if len(vp) >= 40:
+            prov_border_prices[int(p_code)] = round(float((vp["g_rev"] / vp["g_prod"]).median()), 4)
+    prov_border_tup = tuple(sorted(prov_border_prices.items()))
+
     # Per-capita foodc fallback for the 4/600 households missing foodc in 2010
     valid_fc = sel_2010.loc[(sel_2010["foodc"].fillna(0.0) > 0) & (sel_2010["hhnumbers"].fillna(0.0) > 0)]
     per_capita_foodc_med = float((valid_fc["foodc"] / valid_fc["hhnumbers"]).median())
@@ -434,6 +473,7 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
             turnover_pool_share=round(turnover_share, 4),
             scale_pool_share=round(scale_pool_share, 4),
             village_net_inflow_rate=v_inflow,
+            prov_border_grain_prices=prov_border_tup,
         )
 
         hh_list: list[ActorBlueprint] = []
@@ -756,6 +796,11 @@ def load_v2_calibrated_regions(project_root: Path | None, design: V2Design) -> t
         "total_organizations": sum(len(r.organizations) for r in regions_out),
         "total_physical_mu": round(tot_phys, 4),
         "total_tradable_mu": round(fsum(r.verified_tradable_area for r in regions_out), 4),
+        "prov_border_grain_prices_2024": {PROVINCE_NAMES.get(k, str(k)): v for k, v in prov_border_tup},
+        "border_province_cohort_counts": {
+            PROVINCE_NAMES.get(int(k), str(k)): int((b["smgen"] == k).sum())
+            for k in sorted(set(ADJACENT_SURPLUS_PROVINCES) | {s for vals in ADJACENT_SURPLUS_PROVINCES.values() for s in vals} | {42})
+        },
         "region_summaries": region_summaries,
     }
     return tuple(regions_out), meta

@@ -115,8 +115,17 @@ class V2Design:
     village_setup_fee_mult: float = 0.35           # Consolidated village contract setup fee reduction
     village_contiguous_mach_saving: float = 0.08   # Luo (2017) contiguous machinery service cost reduction
     village_grain_covenant_floor: float = 0.70     # 国办发〔2020〕44号 village-pooled anti-non-grain covenant
-    order_cap_yuan_per_mu: float = 120.0           # Order-grain contract fiscal budget cap per mu
+    order_cap_yuan_per_mu: float = 160.0           # Order-grain contract fiscal budget cap (150-240 CNY/mu ZJ/FJ norm)
     order_max_price_bonus_ratio: float = 0.13      # Post-harvest procurement price bonus (~0.35 CNY/kg in coast provinces)
+
+    # 9. V2.2 Endogenous Interprovincial Order-Grain Arbitrage Verification Switch (default False)
+    enable_interprovincial_arbitrage: bool = False
+    order_quota_mode: str = "verified_grain_area_cap"  # "loose_area_quota" or "verified_grain_area_cap"
+    order_loose_quota_kg_per_phys_mu: float = 450.0    # Loose contract quota per operated physical mu (杭余检建〔2022〕4号)
+    order_verified_cap_kg_per_sown_mu: float = 400.0   # Verified grain sown-area cap (浙粮〔2023〕19号: 350-450 kg/mu)
+    interprov_transport_cost_yuan_kg: float = 0.13     # Short-haul cross-border freight & handling (~130 CNY/ton)
+    interprov_brokerage_friction_yuan_kg: float = 0.08 # Quality grading & brokerage margin (~80 CNY/ton)
+    arbitrage_working_cap_turnover_share: float = 0.25 # Rotating working-capital share required for grain transit
 
     def lease_years_for_category(self, actor_category: str) -> int:
         if not self.enable_heterogeneous_lease_terms:

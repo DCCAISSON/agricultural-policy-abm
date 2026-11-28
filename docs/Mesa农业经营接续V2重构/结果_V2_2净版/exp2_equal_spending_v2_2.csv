@@ -1,0 +1,5 @@
+policy,realized_8yr_spending_wan,grain_gain_vs_p0_tons,grain_gain_ci95,kg_per_100yuan_spent,kg_per_100yuan_ci95,pure_price_capitalization_pct,common_unit_rent_diff_yuan_mu
+producer_pre,86.849,370.29,"[360.60, 379.98]",42.64,"[41.52, 43.75]",17.63,28.0
+scale_takeover_pre,87.056,140.41,"[131.43, 149.39]",16.14,"[15.10, 17.19]",62.24,80.66
+service_trusteeship,78.539,364.51,"[355.39, 373.63]",46.41,"[45.26, 47.56]",15.89,23.5
+order_farming_capped,86.706,392.62,"[382.46, 402.78]",45.28,"[44.11, 46.45]",16.63,24.75
