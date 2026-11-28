@@ -1,0 +1,7 @@
+contrast,grain_8yr_diff_tons,grain_ci95,spending_8yr_diff_wan,spending_ci95,withdrawal_diff_tons,withdrawal_ci95
+gov_rl_tree_minus_p0,902.01,"[887.33, 916.69]",119.186,"[119.150, 119.222]",180.89,"[174.31, 187.46]"
+gov_rl_tree_minus_uniform_fixed,389.92,"[376.02, 403.82]",-0.257,"[-0.305, -0.209]",86.43,"[80.27, 92.59]"
+gov_rl_tree_minus_regional_fixed,238.27,"[228.85, 247.70]",-0.678,"[-0.721, -0.634]",-1.71,"[-5.45, 2.03]"
+gov_rl_tree_minus_transparent_rule,617.6,"[602.20, 633.00]",15.132,"[14.612, 15.652]",127.9,"[121.86, 133.93]"
+gov_rl_tree_minus_myopic_tree,-3.76,"[-6.40, -1.12]",0.202,"[0.134, 0.271]",-0.98,"[-1.97, 0.02]"
+gov_rl_tree_minus_gov_rl_ridge,2.53,"[-0.56, 5.63]",0.529,"[0.403, 0.654]",1.98,"[-0.17, 4.13]"

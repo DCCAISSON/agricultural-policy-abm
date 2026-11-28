@@ -12,6 +12,9 @@ Implements fair same-environment, same-budget, same-lagged-information compariso
 from concurrent.futures import ProcessPoolExecutor
 from math import fsum
 import os
+from pathlib import Path
+import pickle
+import warnings
 import numpy as np
 
 from mesa_agri_abm.calibration import CalibratedRegionV2
@@ -20,6 +23,7 @@ from mesa_agri_abm.model import (
     AgriSuccessionMesaModel,
     LocalAllocV2,
     RegionalSubEconomy,
+    _predict_q_values,
 )
 
 
@@ -51,7 +55,16 @@ def fork_all_menu_actions(
         grains[a_idx] = fsum(reg_cache[i][act[i]][1] for i in range(len(model.regions)))
         spends[a_idx] = fsum(reg_cache[i][act[i]][2] for i in range(len(model.regions)))
         rent_penalties[a_idx] = fsum(reg_cache[i][act[i]][3] for i in range(len(model.regions))) / 100_000.0
-        feat = [1.0]
+        if model.design.menu_mode == "v2_2_intertemporal":
+            avg_rem = fsum(reg_cache[i][act[i]][0].observed.get("village_pool_rem_frac", 0.0) for i in range(len(model.regions))) / max(1, len(model.regions))
+            feat = [
+                1.0,
+                next_year / max(1.0, float(model.design.main_years)),
+                avg_rem,
+                1.0 if avg_rem <= 1e-9 else 0.0,
+            ]
+        else:
+            feat = [1.0]
         for i in range(len(model.regions)):
             feat.extend(reg_cache[i][act[i]][4])
         next_phis.append(np.asarray(feat, dtype=np.float64))
@@ -91,6 +104,7 @@ def advance_model_from_cache(
     nxt.last_region_summaries = ()
     nxt.history_joint = []
     nxt.history_regions = []
+    nxt.last_interprov_pair_flows = model.last_interprov_pair_flows.copy()
     nxt.datacollector = model.datacollector
     return nxt
 
@@ -213,6 +227,395 @@ def fit_v2_government_fqi(
         "myopic_weights": myopic_weights,
         "fit_r2_q": fit_r2_q,
         "fit_r2_myopic": fit_r2_myopic,
+    }
+
+
+def _rollout_intertemporal_seed_worker(args: tuple) -> list[tuple[int, dict[int, tuple[np.ndarray, np.ndarray, list[np.ndarray]]]]]:
+    """Collect multi-pass exploratory rollouts on seed `s` using exogenous P0 baseline rewards.
+
+    Crucial invariance fix: subtracting state-dependent `grains_kg[0]` (`G_t(s_t, a=0)`) erases the
+    continuation value of prior 3-year village consolidation campaigns (because `a=0` already inherits
+    the active pool boost). Subtracting a single purely exogenous `p0` reference trajectory `p0_ref_tons[yr]`
+    per seed is 100% policy-invariant and preserves exact Bellman continuation values.
+    """
+    s, calibrated_regions, design, seed_offset, n_rollout_passes = args
+
+    # 1) Exogenous P0 trajectory on seed `s` (strictly independent of RL/exploratory state s_t)
+    m_p0 = AgriSuccessionMesaModel(s, calibrated_regions, design, policy_mode="p0")
+    p0_ref_tons: dict[int, float] = {}
+    p0_rent_pen: dict[int, float] = {}
+    for yr in range(1, design.main_years + 1):
+        j_p0, r_p0, _ = m_p0.step(explicit_action_idx=0)
+        p0_ref_tons[yr] = float(j_p0["grain_kg"]) / 1000.0
+        if design.gov_rent_cap_penalty_weight > 0.0:
+            p0_rent_pen[yr] = fsum(
+                max(0.0, float(rs["unit_rent_yuan_mu"]) - reg.tech.ask_rent_yuan_phys_mu * 2.4) * float(rs["leased_area_mu"])
+                for reg, rs in zip(m_p0.regions, r_p0)
+            ) / 100_000.0
+        else:
+            p0_rent_pen[yr] = 0.0
+
+    # 2) Shared Year-1 fork from exact identical initial state on seed `s`
+    m_init = AgriSuccessionMesaModel(s, calibrated_regions, design, policy_mode="p0")
+    n_actions = len(m_init.menu)
+    vc_idxs = [i for i, act in enumerate(m_init.menu) if act[0][0].startswith("vc+")]
+    sub_idxs = [i for i in range(1, n_actions) if i not in vc_idxs]
+
+    phi_1 = m_init.extract_public_state_features()
+    grains_1, spends_1, rent_pen_1, next_phis_1, clone_lookup_1 = fork_all_menu_actions(m_init)
+    rewards_1 = (
+        (grains_1 / 1000.0 - p0_ref_tons[1])
+        - design.gov_fiscal_cost_weight * (spends_1 / 100_000.0)
+        - design.gov_rent_cap_penalty_weight * np.maximum(0.0, rent_pen_1 - p0_rent_pen[1])
+    )
+
+    pass_results: list[tuple[int, dict[int, tuple[np.ndarray, np.ndarray, list[np.ndarray]]]]] = []
+    for pass_idx in range(n_rollout_passes):
+        exp_rng = np.random.default_rng(seed_offset + s * 10 + pass_idx)
+        out: dict[int, tuple[np.ndarray, np.ndarray, list[np.ndarray]]] = {
+            1: (phi_1, rewards_1, next_phis_1)
+        }
+        if design.main_years <= 1:
+            pass_results.append((s, out))
+            continue
+
+        # Select Year-1 action to diversify opening into pool_active vs pool_empty regimes at Year 2
+        u1 = exp_rng.random()
+        if pass_idx == 0:
+            if vc_idxs and u1 < 0.55:
+                a1 = int(exp_rng.choice(vc_idxs))
+            elif u1 < 0.85:
+                a1 = int(exp_rng.choice(sub_idxs)) if sub_idxs else int(exp_rng.integers(0, n_actions))
+            else:
+                a1 = int(np.argmax(rewards_1))
+        else:
+            if u1 < 0.60:
+                a1 = int(exp_rng.choice(sub_idxs)) if sub_idxs else int(exp_rng.integers(0, n_actions))
+            elif u1 < 0.85:
+                a1 = int(np.argmax(rewards_1))
+            else:
+                a1 = int(exp_rng.choice(vc_idxs)) if vc_idxs else int(exp_rng.integers(0, n_actions))
+
+        m = advance_model_from_cache(m_init, a1, clone_lookup_1)
+        for yr in range(2, design.main_years + 1):
+            phi_t = m.extract_public_state_features()
+            grains_kg, spends_yuan, rent_pen, next_phis, clone_lookup = fork_all_menu_actions(m)
+            rewards = (
+                (grains_kg / 1000.0 - p0_ref_tons[yr])
+                - design.gov_fiscal_cost_weight * (spends_yuan / 100_000.0)
+                - design.gov_rent_cap_penalty_weight * np.maximum(0.0, rent_pen - p0_rent_pen[yr])
+            )
+            out[yr] = (phi_t, rewards, next_phis)
+            if yr < design.main_years:
+                pool_empty = phi_t[3] > 0.5
+                u = exp_rng.random()
+                if pool_empty:
+                    if vc_idxs and u < 0.45:
+                        a_next = int(exp_rng.choice(vc_idxs))
+                    elif u < 0.80:
+                        a_next = int(exp_rng.choice(sub_idxs)) if sub_idxs else int(exp_rng.integers(0, n_actions))
+                    else:
+                        a_next = int(np.argmax(rewards))
+                else:
+                    sub_share = 0.60 if pass_idx == 0 else 0.55
+                    if u < sub_share:
+                        a_next = int(exp_rng.choice(sub_idxs)) if sub_idxs else int(exp_rng.integers(0, n_actions))
+                    elif u < 0.90:
+                        a_next = int(np.argmax(rewards))
+                    else:
+                        a_next = int(exp_rng.choice(vc_idxs)) if vc_idxs else int(exp_rng.integers(0, n_actions))
+                m = advance_model_from_cache(m, a_next, clone_lookup)
+        pass_results.append((s, out))
+    return pass_results
+
+
+def _fit_mlp_ensemble(
+    x_mat: np.ndarray,
+    y_mat: np.ndarray,
+    *,
+    seed_base: int,
+    n_ensemble: int = 2,
+    hidden_layers: tuple[int, ...] = (32, 16),
+    alpha: float = 0.5,
+) -> tuple[dict, float]:
+    from sklearn.exceptions import ConvergenceWarning
+    from sklearn.neural_network import MLPRegressor
+    from sklearn.preprocessing import StandardScaler
+
+    x_in = x_mat[:, 1:]
+    scaler = StandardScaler()
+    z_in = scaler.fit_transform(x_in)
+    mu = scaler.mean_.tolist()
+    sd = np.maximum(1e-6, scaler.scale_).tolist()
+
+    members: list[dict] = []
+    preds = np.zeros_like(y_mat, dtype=np.float64)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ConvergenceWarning)
+        for k in range(n_ensemble):
+            reg = MLPRegressor(
+                hidden_layer_sizes=hidden_layers,
+                activation="relu",
+                solver="adam",
+                alpha=alpha,
+                learning_rate_init=0.003,
+                max_iter=800,
+                tol=1e-4,
+                random_state=seed_base + k,
+            )
+            reg.fit(z_in, y_mat)
+            preds += reg.predict(z_in) / float(n_ensemble)
+            members.append({
+                "kind": "mlp",
+                "mu": mu,
+                "sd": sd,
+                "coefs": [c.tolist() for c in reg.coefs_],
+                "intercepts": [b.tolist() for b in reg.intercepts_],
+            })
+
+    ss_res = float(np.sum((y_mat - preds) ** 2))
+    ss_tot = float(np.sum((y_mat - np.mean(y_mat, axis=0, keepdims=True)) ** 2))
+    r2 = round(1.0 - ss_res / max(1e-9, ss_tot), 4)
+    return {"kind": "mlp_ensemble", "members": members}, r2
+
+
+def _serialize_extra_trees(et_models: list) -> dict:
+    """Serialize one or more fitted ExtraTreesRegressor estimators into pure-JSON tree structures."""
+    trees: list[dict] = []
+    for est_group in et_models:
+        for est in est_group.estimators_:
+            tr = est.tree_
+            trees.append({
+                "feature": [int(f) for f in tr.feature.tolist()],
+                "threshold": [round(float(t), 6) for t in tr.threshold.tolist()],
+                "left": [int(c) for c in tr.children_left.tolist()],
+                "right": [int(c) for c in tr.children_right.tolist()],
+                "value": [
+                    [round(float(v), 5) for v in row]
+                    for row in tr.value[:, :, 0].tolist()
+                ],
+            })
+    return {"kind": "tree_ensemble", "trees": trees}
+
+
+def _r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    ss_res = float(np.sum((y_true - y_pred) ** 2))
+    ss_tot = float(np.sum((y_true - np.mean(y_true, axis=0, keepdims=True)) ** 2))
+    return round(1.0 - ss_res / max(1e-9, ss_tot), 4)
+
+
+def fit_v2_government_mlp_fqi(
+    train_seeds: list[int],
+    calibrated_regions: tuple[CalibratedRegionV2, ...],
+    design: V2Design,
+    *,
+    exploration_seed: int = 20261128,
+    n_rollout_passes: int = 2,
+    max_workers: int | None = None,
+    rollout_cache_path: Path | None = None,
+) -> dict:
+    """Fit Cross-Fitted Double-Q Tree-Based Batch FQI (Ernst, Geurts & Wehenkel, 2005) + matched Ridge-FQI."""
+    from sklearn.ensemble import ExtraTreesRegressor
+
+    probe = AgriSuccessionMesaModel(train_seeds[0], calibrated_regions, design, policy_mode="p0")
+    n_actions = len(probe.menu)
+
+    if rollout_cache_path is not None and rollout_cache_path.exists():
+        with rollout_cache_path.open("rb") as fh:
+            cached = pickle.load(fh)
+        rollouts_by_year = cached["rollouts_by_year"]
+        rollout_seeds_by_year = cached["rollout_seeds_by_year"]
+        n_episodes = int(cached["n_rollout_episodes"])
+    else:
+        rollouts_by_year = {yr: [] for yr in range(1, design.main_years + 1)}
+        rollout_seeds_by_year = {yr: [] for yr in range(1, design.main_years + 1)}
+        tasks = [
+            (s, calibrated_regions, design, exploration_seed, n_rollout_passes)
+            for s in train_seeds
+        ]
+        workers = max_workers if max_workers is not None else min(16, max(2, (os.cpu_count() or 4) - 4))
+        if workers > 1 and len(tasks) >= 8:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                nested_results = list(pool.map(_rollout_intertemporal_seed_worker, tasks))
+        else:
+            nested_results = [_rollout_intertemporal_seed_worker(t) for t in tasks]
+
+        n_episodes = 0
+        for seed_passes in nested_results:
+            for s_id, yr_dict in seed_passes:
+                n_episodes += 1
+                for yr, tup in yr_dict.items():
+                    rollouts_by_year[yr].append(tup)
+                    rollout_seeds_by_year[yr].append(s_id)
+
+        if rollout_cache_path is not None:
+            rollout_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with rollout_cache_path.open("wb") as fh:
+                pickle.dump({
+                    "rollouts_by_year": rollouts_by_year,
+                    "rollout_seeds_by_year": rollout_seeds_by_year,
+                    "n_rollout_episodes": n_episodes,
+                }, fh)
+
+    tree_q_weights: dict[int, dict] = {}
+    tree_myopic_weights: dict[int, dict] = {}
+    ridge_q_weights: dict[int, list[list[float]]] = {}
+    ridge_myopic_weights: dict[int, list[list[float]]] = {}
+    fit_r2_tree_q: dict[int, float] = {}
+    fit_r2_tree_myopic: dict[int, float] = {}
+    fit_r2_ridge_q: dict[int, float] = {}
+    oos_r2_tree_q: dict[int, float] = {}
+    oos_r2_ridge_q: dict[int, float] = {}
+
+    next_tree_a: dict | None = None
+    next_tree_b: dict | None = None
+    next_ridge_a: np.ndarray | None = None
+    next_ridge_b: np.ndarray | None = None
+
+    for yr in range(design.main_years, 0, -1):
+        batch = rollouts_by_year[yr]
+        batch_seeds = np.asarray(rollout_seeds_by_year[yr], dtype=np.int64)
+        x_mat = np.vstack([row[0] for row in batch])
+        r_mat = np.vstack([row[1] for row in batch])
+        n_rows, n_feat = x_mat.shape
+
+        # Double-Q continuation targets (vectorized over batch x n_actions next states)
+        if next_tree_a is None or next_tree_b is None:
+            y_q_tree = r_mat
+            y_q_ridge = r_mat
+        else:
+            all_next_phis = np.vstack([n_phis[a_i] for (_, _, n_phis) in batch for a_i in range(n_actions)])
+            row_grid = np.arange(n_rows)[:, None]
+            act_grid = np.arange(n_actions)[None, :]
+
+            qa_t = _predict_q_values(next_tree_a, all_next_phis).reshape(n_rows, n_actions, n_actions)
+            qb_t = _predict_q_values(next_tree_b, all_next_phis).reshape(n_rows, n_actions, n_actions)
+            qa_t[:, :, 0] -= 1e-6
+            qb_t[:, :, 0] -= 1e-6
+            best_a_t = np.argmax(qa_t, axis=2)
+            best_b_t = np.argmax(qb_t, axis=2)
+            cont_t = 0.5 * (qb_t[row_grid, act_grid, best_a_t] + qa_t[row_grid, act_grid, best_b_t])
+            y_q_tree = r_mat + design.fqi_discount_gamma * cont_t
+
+            qa_r = (all_next_phis @ next_ridge_a).reshape(n_rows, n_actions, n_actions)
+            qb_r = (all_next_phis @ next_ridge_b).reshape(n_rows, n_actions, n_actions)
+            qa_r[:, :, 0] -= 1e-6
+            qb_r[:, :, 0] -= 1e-6
+            best_a_r = np.argmax(qa_r, axis=2)
+            best_b_r = np.argmax(qb_r, axis=2)
+            cont_r = 0.5 * (qb_r[row_grid, act_grid, best_a_r] + qa_r[row_grid, act_grid, best_b_r])
+            y_q_ridge = r_mat + design.fqi_discount_gamma * cont_r
+
+        # Zero-variance opening state (yr == 1): exact empirical sample mean
+        if float(np.max(np.std(x_mat[:, 1:], axis=0))) < 1e-9:
+            tree_myopic_weights[yr] = {"kind": "constant", "values": np.mean(r_mat, axis=0).tolist()}
+            tree_q_weights[yr] = {"kind": "constant", "values": np.mean(y_q_tree, axis=0).tolist()}
+            fit_r2_tree_myopic[yr] = 0.0
+            fit_r2_tree_q[yr] = 0.0
+            oos_r2_tree_q[yr] = 0.0
+
+            w_myo_c = np.zeros((n_feat, n_actions), dtype=np.float64)
+            w_myo_c[0, :] = np.mean(r_mat, axis=0)
+            ridge_myopic_weights[yr] = w_myo_c.tolist()
+
+            w_q_c = np.zeros((n_feat, n_actions), dtype=np.float64)
+            w_q_c[0, :] = np.mean(y_q_ridge, axis=0)
+            ridge_q_weights[yr] = w_q_c.tolist()
+            fit_r2_ridge_q[yr] = 0.0
+            oos_r2_ridge_q[yr] = 0.0
+            next_tree_a = tree_q_weights[yr]
+            next_tree_b = tree_q_weights[yr]
+            next_ridge_a = w_q_c
+            next_ridge_b = w_q_c
+            continue
+
+        # Seed-disjoint 50/50 split for Cross-Fitted Double-Q (fallback to parity rows on tiny seed tests)
+        if len(set(batch_seeds.tolist())) >= 4:
+            mask_a = (batch_seeds % 2) == 0
+            mask_b = ~mask_a
+        else:
+            mask_a = (np.arange(n_rows) % 2) == 0
+            mask_b = ~mask_a
+        if not np.any(mask_a) or not np.any(mask_b):
+            mask_a = np.ones(n_rows, dtype=bool)
+            mask_b = np.ones(n_rows, dtype=bool)
+
+        # 1. Myopic ExtraTrees (gamma = 0)
+        min_leaf = min(4, max(1, n_rows // 8))
+        et_myo = ExtraTreesRegressor(
+            n_estimators=80, max_depth=3, min_samples_leaf=min_leaf, random_state=exploration_seed + yr * 100 + 1
+        ).fit(x_mat[:, 1:], r_mat)
+        myo_entry = _serialize_extra_trees([et_myo])
+        tree_myopic_weights[yr] = myo_entry
+        fit_r2_tree_myopic[yr] = _r2_score(r_mat, _predict_q_values(myo_entry, x_mat))
+
+        # 2. Cross-Fitted Double-Q Intertemporal ExtraTrees (gamma = design.fqi_discount_gamma)
+        min_leaf_f = min(4, max(1, int(np.sum(mask_a)) // 6))
+        et_a = ExtraTreesRegressor(
+            n_estimators=60, max_depth=3, min_samples_leaf=min_leaf_f, random_state=exploration_seed + yr * 100 + 40
+        ).fit(x_mat[mask_a, 1:], y_q_tree[mask_a])
+        et_b = ExtraTreesRegressor(
+            n_estimators=60, max_depth=3, min_samples_leaf=min_leaf_f, random_state=exploration_seed + yr * 100 + 70
+        ).fit(x_mat[mask_b, 1:], y_q_tree[mask_b])
+        ser_a = _serialize_extra_trees([et_a])
+        ser_b = _serialize_extra_trees([et_b])
+        q_entry = _serialize_extra_trees([et_a, et_b])
+        tree_q_weights[yr] = q_entry
+        fit_r2_tree_q[yr] = _r2_score(y_q_tree, _predict_q_values(q_entry, x_mat))
+
+        pred_ab = _predict_q_values(ser_a, x_mat[mask_b])
+        pred_ba = _predict_q_values(ser_b, x_mat[mask_a])
+        oos_r2_tree_q[yr] = round(0.5 * (_r2_score(y_q_tree[mask_b], pred_ab) + _r2_score(y_q_tree[mask_a], pred_ba)), 4)
+        next_tree_a = ser_a
+        next_tree_b = ser_b
+
+        # 3. Matched Cross-Fitted Linear Ridge-FQI ablation on exact same rewards & folds
+        mu_x = np.mean(x_mat[:, 1:], axis=0)
+        sd_x = np.maximum(1e-3, np.std(x_mat[:, 1:], axis=0))
+        z_mat = np.column_stack([np.ones(n_rows, dtype=np.float64), (x_mat[:, 1:] - mu_x) / sd_x])
+        reg_z = design.fqi_ridge_penalty * np.eye(n_feat, dtype=np.float64)
+        reg_z[0, 0] = 1e-6
+
+        def _solve_raw_ridge(z_sub: np.ndarray, y_sub: np.ndarray) -> np.ndarray:
+            wz = np.linalg.solve(z_sub.T @ z_sub + reg_z, z_sub.T) @ y_sub
+            w_raw = np.zeros_like(wz)
+            w_raw[1:] = wz[1:] / sd_x[:, None]
+            w_raw[0] = wz[0] - (mu_x / sd_x) @ wz[1:]
+            return w_raw
+
+        w_myo = _solve_raw_ridge(z_mat, r_mat)
+        ridge_myopic_weights[yr] = w_myo.tolist()
+
+        w_qa = _solve_raw_ridge(z_mat[mask_a], y_q_ridge[mask_a])
+        w_qb = _solve_raw_ridge(z_mat[mask_b], y_q_ridge[mask_b])
+        w_q_merged = 0.5 * (w_qa + w_qb)
+        ridge_q_weights[yr] = w_q_merged.tolist()
+        next_ridge_a = w_qa
+        next_ridge_b = w_qb
+
+        fit_r2_ridge_q[yr] = _r2_score(y_q_ridge, x_mat @ w_q_merged)
+        oos_r2_ridge_q[yr] = round(
+            0.5 * (_r2_score(y_q_ridge[mask_b], x_mat[mask_b] @ w_qa) + _r2_score(y_q_ridge[mask_a], x_mat[mask_a] @ w_qb)),
+            4,
+        )
+
+    return {
+        "n_train_seeds": len(train_seeds),
+        "n_rollout_episodes": n_episodes,
+        "n_actions": n_actions,
+        "tree_q_weights": tree_q_weights,
+        "tree_myopic_weights": tree_myopic_weights,
+        "mlp_q_weights": tree_q_weights,
+        "mlp_myopic_weights": tree_myopic_weights,
+        "ridge_q_weights": ridge_q_weights,
+        "ridge_myopic_weights": ridge_myopic_weights,
+        "fit_r2_tree_q": fit_r2_tree_q,
+        "fit_r2_tree_myopic": fit_r2_tree_myopic,
+        "fit_r2_mlp_q": fit_r2_tree_q,
+        "fit_r2_mlp_myopic": fit_r2_tree_myopic,
+        "fit_r2_ridge_q": fit_r2_ridge_q,
+        "oos_r2_tree_q": oos_r2_tree_q,
+        "oos_r2_ridge_q": oos_r2_ridge_q,
     }
 
 

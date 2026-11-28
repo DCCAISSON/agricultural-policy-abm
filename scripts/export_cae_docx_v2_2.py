@@ -213,16 +213,30 @@ def convert_markdown_to_docx(md_path: Path = MD_PATH, docx_path: Path = DOCX_PAT
             i += 1
             continue
 
-        # Bibliography entries [1] ... with hanging indent
+        # Bibliography entries [1] ... with hanging indent (supports optional second bilingual English line)
         if re.match(r"^\[\d+\]\s+", clean_ln):
+            has_en_subline = (
+                i + 1 < len(lines)
+                and bool(re.match(r"^\s{2,}[A-Za-z]", lines[i + 1].replace("`", "")))
+            )
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             p.paragraph_format.left_indent = Cm(0.75)
             p.paragraph_format.first_line_indent = Cm(-0.75)
-            p.paragraph_format.line_spacing = 1.25
-            p.paragraph_format.space_after = Pt(3)
+            p.paragraph_format.line_spacing = 1.22
+            p.paragraph_format.space_after = Pt(1 if has_en_subline else 3)
             _add_formatted_runs(p, clean_ln, base_size=9.0)
             i += 1
+            if has_en_subline:
+                en_ln = lines[i].replace("`", "").strip()
+                p_en = doc.add_paragraph()
+                p_en.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                p_en.paragraph_format.left_indent = Cm(0.75)
+                p_en.paragraph_format.first_line_indent = Cm(0.0)
+                p_en.paragraph_format.line_spacing = 1.18
+                p_en.paragraph_format.space_after = Pt(3.5)
+                _add_formatted_runs(p_en, en_ln, base_size=8.5, color=RGBColor(0x33, 0x41, 0x55))
+                i += 1
             continue
 
         # Body paragraph (merge consecutive plain lines separated by single newline unless bullet/numbered)

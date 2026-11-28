@@ -70,31 +70,90 @@ class FixedContractSnapshot:
     recovered_pids: frozenset[str]
 
 
+def _split_int_by_weights(amount: int, idxs: tuple[int, ...], weights: list[float]) -> dict[int, int]:
+    if amount <= 0 or not idxs:
+        return {i: 0 for i in idxs}
+    sub_tot = fsum(weights[i] for i in idxs)
+    raw = [amount * (weights[i] / max(1e-9, sub_tot)) for i in idxs]
+    fl = [floor(x) for x in raw]
+    rem = amount - sum(fl)
+    order = sorted(range(len(idxs)), key=lambda k: (-(raw[k] - fl[k]), idxs[k]))
+    for k in order[:rem]:
+        fl[k] += 1
+    return {idxs[k]: fl[k] for k in range(len(idxs))}
+
+
+def _predict_q_values(entry: object, phi: np.ndarray) -> np.ndarray:
+    """Evaluate linear matrix, constant vector, serialized tree ensemble, OR MLP dict on 1D/2D `phi`."""
+    phi_arr = np.asarray(phi, dtype=np.float64)
+    if isinstance(entry, dict):
+        kind = entry.get("kind", "")
+        if kind == "constant":
+            vals = np.asarray(entry["values"], dtype=np.float64)
+            if phi_arr.ndim == 2:
+                return np.broadcast_to(vals, (phi_arr.shape[0], vals.shape[0])).copy()
+            return vals.copy()
+        if kind == "tree_ensemble":
+            x_2d = phi_arr[None, 1:] if phi_arr.ndim == 1 else phi_arr[:, 1:]
+            n_rows = x_2d.shape[0]
+            trees = entry["trees"]
+            n_actions = len(trees[0]["value"][0])
+            acc = np.zeros((n_rows, n_actions), dtype=np.float64)
+            row_idx = np.arange(n_rows, dtype=np.int32)
+            for tr in trees:
+                feat = np.asarray(tr["feature"], dtype=np.int32)
+                thresh = np.asarray(tr["threshold"], dtype=np.float64)
+                left = np.asarray(tr["left"], dtype=np.int32)
+                right = np.asarray(tr["right"], dtype=np.int32)
+                val = np.asarray(tr["value"], dtype=np.float64)
+                nodes = np.zeros(n_rows, dtype=np.int32)
+                while True:
+                    f_cur = feat[nodes]
+                    active = f_cur >= 0
+                    if not np.any(active):
+                        break
+                    act_rows = row_idx[active]
+                    act_nodes = nodes[active]
+                    go_left = x_2d[act_rows, f_cur[active]] <= thresh[act_nodes]
+                    nodes[active] = np.where(go_left, left[act_nodes], right[act_nodes])
+                acc += val[nodes]
+            acc /= float(len(trees))
+            return acc[0] if phi_arr.ndim == 1 else acc
+        if kind == "mlp_ensemble":
+            preds = [_predict_q_values(member, phi_arr) for member in entry["members"]]
+            return np.mean(np.stack(preds, axis=0), axis=0)
+        if kind == "mlp":
+            mu = np.asarray(entry["mu"], dtype=np.float64)
+            sd = np.asarray(entry["sd"], dtype=np.float64)
+            x = (phi_arr[..., 1:] - mu) / np.maximum(1e-6, sd)
+            coefs = entry["coefs"]
+            intercepts = entry["intercepts"]
+            h = x
+            for idx_l, (w_l, b_l) in enumerate(zip(coefs, intercepts)):
+                h = h @ np.asarray(w_l, dtype=np.float64) + np.asarray(b_l, dtype=np.float64)
+                if idx_l < len(coefs) - 1:
+                    h = np.maximum(0.0, h)
+            return h
+    w_mat = np.asarray(entry, dtype=np.float64)
+    return phi_arr @ w_mat
+
+
 def build_policy_menu(regions: tuple[CalibratedRegionV2, ...], design: V2Design) -> tuple[JointActionV2, ...]:
-    """Construct the 25-action shared-budget fiscal menu across 4 policy regions:
-    - Action 0: P0 (all zero incremental spending)
-    - Actions 1..5: National area-proportional allocation (producer_pre, producer_post,
-                    scale_takeover_pre, scale_takeover_post, service_trusteeship)
-    - Actions 6..21: Region-priority tilt (4 regions x 4 key instruments: 55% to priority region
-                     with spillover + 45% foundational support across other 3 regions)
-    - Actions 22..24: Institutional regionally tailored mixes (e.g., Hilly Service + Grain-Plains Scale)
+    """Construct shared-budget fiscal menus across 4 policy regions:
+    - Action 0: P0 (zero incremental spending)
+    - Actions 1..5: National area-proportional allocation
+    - Actions 6..21: Region-priority tilt (4 regions x 4 key instruments)
+    - Actions 22..24: Regional institutional mixes (`v2_25` stops at 25)
+    - Actions 25..29: Clean V2.2 coastal-vs-inland mixes & Order Farming (`v2_2_clean` has 30)
+    - Actions 30..35: Exp 5B additions (`v2_2_intertemporal` has 36, including Order-East mix & 3-yr paid village campaigns)
     """
     n_reg = len(regions)
     areas = [r.physical_area for r in regions]
-    tot_area = fsum(areas)
+    tradables = [r.verified_tradable_area for r in regions]
     budget = design.annual_common_budget_yuan
 
     def split_by_area(amount: int, idxs: tuple[int, ...]) -> dict[int, int]:
-        if amount <= 0 or not idxs:
-            return {i: 0 for i in idxs}
-        sub_tot = fsum(areas[i] for i in idxs)
-        raw = [amount * (areas[i] / sub_tot) for i in idxs]
-        fl = [floor(x) for x in raw]
-        rem = amount - sum(fl)
-        order = sorted(range(len(idxs)), key=lambda k: (-(raw[k] - fl[k]), idxs[k]))
-        for k in order[:rem]:
-            fl[k] += 1
-        return {idxs[k]: fl[k] for k in range(len(idxs))}
+        return _split_int_by_weights(amount, idxs, areas)
 
     def max_useful_for(r_idx: int, inst: str) -> int:
         reg = regions[r_idx]
@@ -147,7 +206,7 @@ def build_policy_menu(regions: tuple[CalibratedRegionV2, ...], design: V2Design)
 
     if design.menu_mode == "v2_25":
         assert len(actions) == 25
-    elif design.menu_mode == "v2_2_clean":
+    elif design.menu_mode in ("v2_2_clean", "v2_2_intertemporal"):
         # Actions 25..29: Cross-instrument regional mixes + Order Grain (zero heuristic verification suffixes)
         if budget <= 0:
             for _ in range(5):
@@ -165,7 +224,48 @@ def build_policy_menu(regions: tuple[CalibratedRegionV2, ...], design: V2Design)
             actions.append(tuple(("order_farming", prop_all[i]) if prop_all[i] > 0 else OFF_LOCAL for i in range(n_reg)))
             # 29: Coastal deficit order_farming (East) + inland/northern service_trusteeship (Central/West/NE)
             actions.append((("order_farming", prop_all[0]), ("service_trusteeship", prop_all[1]), ("service_trusteeship", prop_all[2]), ("service_trusteeship", prop_all[3])))
-        assert len(actions) == 30
+        if design.menu_mode == "v2_2_clean":
+            assert len(actions) == 30
+        else:
+            # Actions 30..35: Exp 5B intertemporal mix (order-east tilt + paid 3-yr village consolidation campaigns)
+            if budget <= 0:
+                for _ in range(6):
+                    actions.append((OFF_LOCAL,) * n_reg)
+            else:
+                e_ord = min(floor(0.50 * budget), max_useful_for(0, "order_farming"))
+                sp_ord = split_by_area(budget - e_ord, (1, 2, 3))
+                # 30: East 50% order_farming + Central/West/NE 50% service_trusteeship
+                actions.append((("order_farming", e_ord), ("service_trusteeship", sp_ord[1]), ("service_trusteeship", sp_ord[2]), ("service_trusteeship", sp_ord[3])))
+                # 31: East 50% order_farming + Central/West/NE 50% producer_pre
+                actions.append((("order_farming", e_ord), ("producer_pre", sp_ord[1]), ("producer_pre", sp_ord[2]), ("producer_pre", sp_ord[3])))
+
+                vc_tot = min(budget, int(round(design.village_campaign_fee_yuan))) if design.enable_paid_village_campaigns else 0
+                vc_reg = _split_int_by_weights(vc_tot, tuple(range(n_reg)), tradables)
+                rem_b = max(0, budget - vc_tot)
+                rem_all = split_by_area(rem_b, tuple(range(n_reg)))
+                e_rem = min(floor(0.50 * rem_b), max_useful_for(0, "producer_pre"))
+                sp_rem = split_by_area(rem_b - e_rem, (1, 2, 3))
+                e_rem_ord = min(floor(0.50 * rem_b), max_useful_for(0, "order_farming"))
+                sp_rem_ord = split_by_area(rem_b - e_rem_ord, (1, 2, 3))
+                # 32: Paid 3-yr village campaign + remaining East producer_pre & inland service_trusteeship
+                actions.append((
+                    ("vc+producer_pre", vc_reg[0] + e_rem),
+                    ("vc+service_trusteeship", vc_reg[1] + sp_rem[1]),
+                    ("vc+service_trusteeship", vc_reg[2] + sp_rem[2]),
+                    ("vc+service_trusteeship", vc_reg[3] + sp_rem[3]),
+                ))
+                # 33: Paid 3-yr village campaign + remaining East order_farming & inland service_trusteeship
+                actions.append((
+                    ("vc+order_farming", vc_reg[0] + e_rem_ord),
+                    ("vc+service_trusteeship", vc_reg[1] + sp_rem_ord[1]),
+                    ("vc+service_trusteeship", vc_reg[2] + sp_rem_ord[2]),
+                    ("vc+service_trusteeship", vc_reg[3] + sp_rem_ord[3]),
+                ))
+                # 34: Paid 3-yr village campaign + remaining national producer_pre
+                actions.append(tuple(("vc+producer_pre", vc_reg[i] + rem_all[i]) for i in range(n_reg)))
+                # 35: Paid 3-yr village campaign + remaining national service_trusteeship
+                actions.append(tuple(("vc+service_trusteeship", vc_reg[i] + rem_all[i]) for i in range(n_reg)))
+            assert len(actions) == 36
     else:
         raise ValueError(f"Unsupported menu_mode: {design.menu_mode}")
 
@@ -223,13 +323,22 @@ def symmetric_rent_decomposition(
 class RegionalSubEconomy:
     """Regional subsystem hosted inside `AgriSuccessionMesaModel`."""
 
-    def __init__(self, model: "AgriSuccessionMesaModel", reg_seed: int, cal: CalibratedRegionV2):
+    def __init__(
+        self,
+        model: "AgriSuccessionMesaModel",
+        reg_seed: int,
+        cal: CalibratedRegionV2,
+        *,
+        vc_fee_alloc_yuan: float = 0.0,
+    ):
         self.model = model
         self.seed = reg_seed
         self.cal = cal
         self.name = cal.name
         self.tech = cal.tech
         self.land_mu = cal.physical_area
+        self.vc_campaign_fee_yuan = float(vc_fee_alloc_yuan)
+        self.village_pool_remaining_years: int = 0
 
         self.parcels: tuple[ParcelBlueprint, ...] = tuple(sorted(cal.parcels, key=lambda p: p.id))
         self.parcel_map: dict[str, ParcelBlueprint] = {p.id: p for p in self.parcels}
@@ -268,6 +377,9 @@ class RegionalSubEconomy:
             "tight_liquidity_share": 0.25,
             "fiscal_exec_rate": 1.0,
             "last_unit_rent": cal.tech.ask_rent_yuan_phys_mu,
+            "multi_year_lease_rate": 0.0,
+            "default_return_rate": 0.0,
+            "village_pool_rem_frac": 0.0,
         }
         self.last_parcel_rents: dict[str, tuple[float, float]] = {}
         self.last_parcel_rows: list[dict] = []
@@ -286,6 +398,15 @@ class RegionalSubEconomy:
                 float(obs["leased_rate"]),
                 float(obs["tight_liquidity_share"]),
             ]
+        if design.menu_mode == "v2_2_intertemporal":
+            return [
+                float(obs["grain_cult_rate"]),
+                float(obs["idle_rate"]),
+                float(obs["leased_rate"]),
+                float(obs["tight_liquidity_share"]),
+                float(obs.get("multi_year_lease_rate", 0.0)),
+                float(obs.get("default_return_rate", 0.0)),
+            ]
         # Clean 17-dim public macro state (1 + 4 * 4 genuinely observable macro rates)
         return [
             float(obs["grain_cult_rate"]),
@@ -302,6 +423,8 @@ class RegionalSubEconomy:
         other.name = self.name
         other.tech = self.tech
         other.land_mu = self.land_mu
+        other.vc_campaign_fee_yuan = self.vc_campaign_fee_yuan
+        other.village_pool_remaining_years = self.village_pool_remaining_years
         other.parcels = self.parcels
         other.parcel_map = self.parcel_map
         other.households = {k: v.clone_into(new_model) for k, v in self.households.items()}
@@ -322,10 +445,13 @@ class RegionalSubEconomy:
         other.last_order_bonus_kg = 0.0
         return other
 
-    def build_schedule(self, instrument: str, budget_cap: float, design: V2Design) -> SubsidySchedule:
+    def build_schedule(
+        self, instrument: str, budget_cap: float, design: V2Design, *, active_vc: bool | None = None
+    ) -> SubsidySchedule:
         thresh = design.scale_threshold_for(self.name)
-        v_sav = design.village_contiguous_mach_saving if design.enable_village_coordination else 0.0
-        g_cov = design.village_grain_covenant_floor if design.enable_village_coordination else 0.0
+        v_active = design.enable_village_coordination if active_vc is None else active_vc
+        v_sav = design.village_contiguous_mach_saving if v_active else 0.0
+        g_cov = design.village_grain_covenant_floor if v_active else 0.0
         p_b_tup = self.tech.prov_border_grain_prices if design.enable_interprovincial_arbitrage else ()
 
         if instrument == "none" or budget_cap <= 0.0:
@@ -421,7 +547,15 @@ class RegionalSubEconomy:
             # Background fertility cash enters household spring liquidity via "One-Card" transfer
             op.current_wc_open = max(0.0, op.working_cap * wc_shock[aid] + fertility_received[aid])
 
-        sched_init = self.build_schedule(instrument, budget_cap, design)
+        is_vc_campaign = instrument.startswith("vc+")
+        base_inst = instrument[3:] if is_vc_campaign else instrument
+        vc_fee_yuan = min(budget_cap, self.vc_campaign_fee_yuan) if (is_vc_campaign and budget_cap > 0.0) else 0.0
+        sub_budget_cap = max(0.0, budget_cap - vc_fee_yuan)
+        if is_vc_campaign and vc_fee_yuan > 0.0:
+            self.village_pool_remaining_years = max(1, design.village_campaign_cycle_years)
+        active_vc = design.enable_village_coordination or (self.village_pool_remaining_years > 0)
+
+        sched_init = self.build_schedule(base_inst, sub_budget_cap, design, active_vc=active_vc)
 
         # 1 & 2 & 3. Either use Fixed-Contract Snapshot (Exp 1) OR run Endogenous Land Rental Market
         if fixed_contract_ref is not None:
@@ -478,10 +612,10 @@ class RegionalSubEconomy:
             retained_pids: set[str] = set()
             released_pids = set()
             eff_friction = design.search_friction_prob * (
-                design.village_friction_mult if design.enable_village_coordination else 1.0
+                design.village_friction_mult if active_vc else 1.0
             )
             eff_setup_fee = design.contract_setup_fee_yuan * (
-                design.village_setup_fee_mult if design.enable_village_coordination else 1.0
+                design.village_setup_fee_mult if active_vc else 1.0
             )
             if design.dynamic_expected_rent_update and self.observed.get("last_unit_rent", 0.0) > 10.0:
                 base_exp_rent = 0.55 * self.tech.ask_rent_yuan_phys_mu + 0.45 * float(self.observed["last_unit_rent"])
@@ -569,7 +703,7 @@ class RegionalSubEconomy:
                         continue
                     ask_mu = self.tech.ask_rent_yuan_phys_mu * p.quality
                     area_key = round(p.area, 4)
-                    grp_id_eff = f"VPOOL_{sm}" if design.enable_village_coordination else p.offer_group_id
+                    grp_id_eff = f"VPOOL_{sm}" if active_vc else p.offer_group_id
                     valid_bids: list[tuple[float, str]] = []
 
                     for b_id in cands:
@@ -749,7 +883,6 @@ class RegionalSubEconomy:
 
         sched_eff = sched_init
         plans: dict[str, PMPPlanV2] = {}
-        sub_budget_cap = budget_cap
 
         def _claim_for_plan(pl: PMPPlanV2, sc: SubsidySchedule) -> float:
             if sc.instrument == "service_trusteeship":
@@ -799,8 +932,8 @@ class RegionalSubEconomy:
                 plans, raw_claim_total = solve_all_operators(sched_eff)
 
         # 5. Harvest realization, 6-Category Parcel Transition Ledger & Settlement
-        committed_yuan = min(budget_cap, raw_claim_total) if sched_eff.instrument != "none" else 0.0
-        actual_incremental_spending = 0.0
+        committed_yuan = (vc_fee_yuan + min(sub_budget_cap, raw_claim_total)) if base_inst != "none" else vc_fee_yuan
+        actual_incremental_spending = vc_fee_yuan
         support_by_actor: dict[str, float] = defaultdict(float)
 
         for aid, pl in plans.items():
@@ -1184,6 +1317,16 @@ class RegionalSubEconomy:
         idi_score = 0.55 * cult_share + 0.45 * (1.0 - gini)
 
         prev_u_rent = self.observed.get("last_unit_rent", self.tech.ask_rent_yuan_phys_mu)
+        multi_lease_mu = fsum(
+            self.parcel_map[pid].area for pid, c in active_contracts.items() if (c.end_year - c.start_year) >= 2
+        )
+        default_ret_mu = (
+            fsum(self.parcel_map[pid].area for pid in defaulted_pids)
+            if fixed_contract_ref is None
+            else 0.0
+        )
+        if self.village_pool_remaining_years > 0:
+            self.village_pool_remaining_years -= 1
 
         self.observed = {
             "grain_kg": total_grain_kg / max(0.5, weather_mult),  # Weather-normalized structural grain capacity
@@ -1195,6 +1338,9 @@ class RegionalSubEconomy:
             "tight_liquidity_share": tight_liq_count / max(1, len(actor_ids)),
             "fiscal_exec_rate": actual_incremental_spending / max(1.0, budget_cap) if budget_cap > 0 else 1.0,
             "last_unit_rent": unit_rent_mu if leased_area_mu > 1.0 else prev_u_rent,
+            "multi_year_lease_rate": multi_lease_mu / max(1.0, self.land_mu),
+            "default_return_rate": default_ret_mu / max(1.0, self.land_mu),
+            "village_pool_rem_frac": self.village_pool_remaining_years / max(1.0, float(design.village_campaign_cycle_years)),
         }
 
         reg_summary = {
@@ -1205,6 +1351,7 @@ class RegionalSubEconomy:
             "announced_rate_mu": round(sched_eff.rate_per_phys_mu, 4),
             "committed": round(committed_yuan, 4),
             "spending": round(actual_incremental_spending, 4),
+            "village_coord_fee_yuan": round(vc_fee_yuan, 4),
             "background_fertility_yuan": round(fsum(fertility_received.values()), 4),
             "fertility_forfeited_mu": round(fertility_forfeited_mu, 4),
             "grain_kg": round(total_grain_kg, 4),
@@ -1294,7 +1441,9 @@ class RegionalSubEconomy:
             assert req(fsum(p["rent_yuan"] for p in parcel_rows), fsum(a["rent_income"] for a in actor_rows))
             assert req(fsum(p["incremental_support_yuan"] for p in parcel_rows), fsum(a["incremental_support_yuan"] for a in actor_rows))
             assert req(
-                fsum(a["incremental_support_yuan"] for a in actor_rows) + s.get("verification_admin_cost_yuan", 0.0),
+                fsum(a["incremental_support_yuan"] for a in actor_rows)
+                + s.get("verification_admin_cost_yuan", 0.0)
+                + s.get("village_coord_fee_yuan", 0.0),
                 s["spending"],
             )
 
@@ -1326,8 +1475,12 @@ class AgriSuccessionMesaModel(mesa.Model):
             fixed_action_idx=fixed_action_idx,
             learned_weights=learned_weights,
         )
+        vc_tot = min(design.annual_common_budget_yuan, int(round(design.village_campaign_fee_yuan))) if design.enable_paid_village_campaigns else 0
+        vc_fees = _split_int_by_weights(
+            vc_tot, tuple(range(len(calibrated_regions))), [r.verified_tradable_area for r in calibrated_regions]
+        )
         self.regions: tuple[RegionalSubEconomy, ...] = tuple(
-            RegionalSubEconomy(self, len(calibrated_regions) * seed + i, reg)
+            RegionalSubEconomy(self, len(calibrated_regions) * seed + i, reg, vc_fee_alloc_yuan=float(vc_fees[i]))
             for i, reg in enumerate(calibrated_regions)
         )
 
@@ -1381,7 +1534,16 @@ class AgriSuccessionMesaModel(mesa.Model):
 
     def extract_public_state_features(self) -> np.ndarray:
         """Lagged public macro feature vector (contains ZERO household private cash, hidden skill, or future weather)."""
-        feats = [1.0]
+        if self.design.menu_mode == "v2_2_intertemporal":
+            avg_rem = fsum(r.observed.get("village_pool_rem_frac", 0.0) for r in self.regions) / max(1, len(self.regions))
+            feats = [
+                1.0,
+                self.year / max(1.0, float(self.design.main_years)),
+                avg_rem,
+                1.0 if avg_rem <= 1e-9 else 0.0,
+            ]
+        else:
+            feats = [1.0]
         for r in self.regions:
             feats.extend(r.public_feature_list(self.design))
         return np.asarray(feats, dtype=np.float64)
@@ -1428,8 +1590,7 @@ class AgriSuccessionMesaModel(mesa.Model):
             if not self.government.learned_weights or next_yr not in self.government.learned_weights:
                 return 1  # Safe producer_pre fallback (NEVER disaster cutoff P0!)
             phi = self.extract_public_state_features()
-            w_mat = np.asarray(self.government.learned_weights[next_yr], dtype=np.float64)
-            q_vals = phi @ w_mat
+            q_vals = _predict_q_values(self.government.learned_weights[next_yr], phi)
             q_vals[0] -= 1e-6  # Break exact ties in favor of active support when budget > 0
             return int(np.argmax(q_vals))
         raise ValueError(f"Unknown government policy_mode: {mode}")
@@ -1506,7 +1667,8 @@ class AgriSuccessionMesaModel(mesa.Model):
             bought_by_deficit: dict[int, float] = defaultdict(float)
 
             for r_i, (reg, (inst, cap)) in enumerate(zip(self.regions, eff_joint_act, strict=True)):
-                if inst != "order_farming" or cap <= 0.0 or not reg.last_order_claims:
+                base_inst = inst[3:] if inst.startswith("vc+") else inst
+                if base_inst != "order_farming" or cap <= 0.0 or not reg.last_order_claims:
                     continue
                 op_settlement: list[tuple[str, float, float, float, dict]] = []
                 for aid in sorted(reg.last_order_claims):
@@ -1547,7 +1709,8 @@ class AgriSuccessionMesaModel(mesa.Model):
                     op_settlement.append((aid, own_kg, exec_arb_kg, claim_own + claim_arb, ctx, claim_own, claim_arb))
 
                 reg_claim_tot = fsum(item[3] for item in op_settlement)
-                reg_res_cap = float(reg_rows[r_i]["reservation"])
+                vc_fee_keep = float(reg_rows[r_i].get("village_coord_fee_yuan", 0.0))
+                reg_res_cap = max(0.0, float(reg_rows[r_i]["reservation"]) - vc_fee_keep)
                 scale_sub = min(1.0, reg_res_cap / reg_claim_tot) if reg_claim_tot > reg_res_cap + 1e-7 else 1.0
                 reg_new_spend = 0.0
                 for aid, own_kg, exec_arb_kg, tot_c, ctx, c_own, c_arb in op_settlement:
@@ -1572,9 +1735,9 @@ class AgriSuccessionMesaModel(mesa.Model):
                             op.wealth -= draw
                             op.working_cap = max(self.design.working_cap_Min_buffer_yuan * 0.4, op.working_cap - ((-delta_cash) - draw))
 
-                assert reg_new_spend <= reg_res_cap + 1e-4
-                reg_rows[r_i]["spending"] = round(reg_new_spend, 4)
-                reg_rows[r_i]["committed"] = round(max(float(reg_rows[r_i]["committed"]), reg_new_spend), 4)
+                assert vc_fee_keep + reg_new_spend <= float(reg_rows[r_i]["reservation"]) + 1e-4
+                reg_rows[r_i]["spending"] = round(vc_fee_keep + reg_new_spend, 4)
+                reg_rows[r_i]["committed"] = round(max(float(reg_rows[r_i]["committed"]), vc_fee_keep + reg_new_spend), 4)
 
             tot_bought_kg = fsum(bought_by_deficit.values())
             tot_deducted_kg = fsum(surplus_deducted.values())

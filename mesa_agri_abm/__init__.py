@@ -10,9 +10,10 @@ from mesa_agri_abm.agents import (
     ScaleOrgMesaAgent,
 )
 from mesa_agri_abm.calibration import CalibratedRegionV2, load_v2_calibrated_regions
-from mesa_agri_abm.config import V2Design, clean_v2_2_design, default_v2_design
+from mesa_agri_abm.config import V2Design, clean_v2_2_design, default_v2_design, intertemporal_v2_2_design
 from mesa_agri_abm.government_rl import (
     fit_v2_government_fqi,
+    fit_v2_government_mlp_fqi,
     fork_all_menu_actions,
     run_policy_episode,
     select_dev_fixed_policies,
@@ -40,7 +41,9 @@ __all__ = [
     "clean_v2_2_design",
     "default_v2_design",
     "fit_v2_government_fqi",
+    "fit_v2_government_mlp_fqi",
     "fork_all_menu_actions",
+    "intertemporal_v2_2_design",
     "load_v2_calibrated_regions",
     "run_policy_episode",
     "select_dev_fixed_policies",

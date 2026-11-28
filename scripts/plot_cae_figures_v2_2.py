@@ -69,139 +69,163 @@ def _draw_arrow(ax, x1, y1, x2, y2, *, color=C_SLATE, lw=1.7, rad=0.0, both=Fals
     ax.add_patch(arr)
 
 
+def _draw_elbow(ax, x1, y1, x2, y2, *, color=C_SLATE, lw=2.0, angle_a=0, angle_b=90, rad=6, both=False, zorder=4):
+    style = "<|-|>" if both else "-|>"
+    arr = FancyArrowPatch(
+        (x1, y1), (x2, y2),
+        arrowstyle=style, mutation_scale=12,
+        linewidth=lw, color=color,
+        connectionstyle=f"angle,angleA={angle_a},angleB={angle_b},rad={rad}",
+        zorder=zorder,
+    )
+    ax.add_patch(arr)
+
+
 def plot_fig1_architecture(out_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(15.2, 8.2))
+    """Minimalist 3-column CAE schematic (<=120 Chinese chars inside nodes/arrows, clean whitespace)."""
+    from matplotlib.patches import Circle, Polygon, Rectangle
+
+    fig, ax = plt.subplots(figsize=(14.6, 7.4))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
     fig.patch.set_facecolor("#FFFFFF")
 
-    # Main title banner
     ax.text(
-        0.50, 0.962,
-        "农业经营接续、财政支持传导与动态调控系统总体机理框架",
-        ha="center", va="center", fontsize=16.0, fontweight="bold", color="#14233C",
-    )
-    ax.text(
-        0.50, 0.927,
-        "严格遵循 2010 年及以前微观数据校准边界与双边实物守恒约束",
-        ha="center", va="center", fontsize=10.5, color=C_SLATE,
+        0.50, 0.942,
+        "农业经营接续、财政支持传导与政府动态调控机理图",
+        ha="center", va="center", fontsize=15.5, fontweight="bold", color="#1C2833",
     )
 
-    # Three column outer containers
-    _draw_box(ax, 0.015, 0.04, 0.275, 0.85, fc=C_LIGHT_BG, ec="#CBD5E1", lw=1.2, r=0.016, zorder=1)
-    _draw_box(ax, 0.308, 0.04, 0.398, 0.85, fc="#F2F6FB", ec="#93B4D8", lw=1.4, r=0.016, zorder=1)
-    _draw_box(ax, 0.724, 0.04, 0.261, 0.85, fc=C_LIGHT_BG, ec="#CBD5E1", lw=1.2, r=0.016, zorder=1)
+    # Three soft neutral column panels matching minimalist scientific layout
+    _draw_box(ax, 0.024, 0.055, 0.258, 0.825, fc="#F4F6F8", ec="none", lw=0.0, r=0.022, zorder=1)
+    _draw_box(ax, 0.304, 0.055, 0.392, 0.825, fc="#F4F6F8", ec="none", lw=0.0, r=0.022, zorder=1)
+    _draw_box(ax, 0.718, 0.055, 0.258, 0.825, fc="#F4F6F8", ec="none", lw=0.0, r=0.022, zorder=1)
 
-    ax.text(0.1525, 0.865, "一、微观调查与制度约束底座", ha="center", va="center", fontsize=11.5, fontweight="bold", color=C_NAVY)
-    ax.text(0.507, 0.865, "二、双层嵌套多主体动态仿真核心", ha="center", va="center", fontsize=11.5, fontweight="bold", color=C_NAVY)
-    ax.text(0.8545, 0.865, "三、核验审计与多维评估输出", ha="center", va="center", fontsize=11.5, fontweight="bold", color=C_NAVY)
+    ax.text(0.153, 0.842, "数据与边界", ha="center", va="center", fontsize=12.0, fontweight="bold", color="#2C3E50")
+    ax.text(0.500, 0.842, "动态调控中枢", ha="center", va="center", fontsize=12.0, fontweight="bold", color="#2C3E50")
+    ax.text(0.847, 0.842, "仿真与诊断输出", ha="center", va="center", fontsize=12.0, fontweight="bold", color="#2C3E50")
 
-    # Left Column - Top Card: Empirical Data
-    _draw_box(ax, 0.028, 0.475, 0.249, 0.360, fc="#FFFFFF", ec=C_BLUE, lw=1.3, r=0.013, zorder=2)
-    _draw_box(ax, 0.036, 0.779, 0.233, 0.046, fc=C_NAVY, ec=C_NAVY, lw=0.8, r=0.008, zorder=3)
-    ax.text(0.1525, 0.802, "全国农村固定观察点实证底座", ha="center", va="center", fontsize=10.0, fontweight="bold", color="#FFFFFF", zorder=4)
-    left_top_items = [
-        "1. 600户固定队列（4区 5,277.5 亩；\n   可流转确权地 4,009.2 亩）",
-        "2. 2010年个体调查匹配（600户全覆盖）：\n   户主均龄53.19岁，外出217.6日/年",
-        "3. 四区具名主粮与实测农机作业费\n   （小麦、稻谷、玉米、大豆）",
-        "4. 主食自留消费量（596户实测）\n   与各省基期农产品产地价格",
-    ]
-    y_pos = 0.742
-    for txt in left_top_items:
-        ax.text(0.038, y_pos, txt, ha="left", va="top", fontsize=8.4, color="#1E293B", linespacing=1.32, zorder=4)
-        y_pos -= 0.066
+    # ---------------- Column 1: Data & Institutional Boundaries ----------------
+    # Card 1A: Micro Survey Base
+    _draw_box(ax, 0.045, 0.460, 0.216, 0.338, fc="#FFFFFF", ec="#4A7EC7", lw=1.4, r=0.016, zorder=2)
+    ax.text(0.153, 0.760, "微观观察底座", ha="center", va="center", fontsize=10.8, fontweight="bold", color="#1E3A5F", zorder=4)
+    # Minimalist tablet/ledger + sparkline vector icon
+    _draw_box(ax, 0.072, 0.545, 0.162, 0.165, fc="#F3F7FD", ec="#4A7EC7", lw=1.0, r=0.009, zorder=3)
+    ax.add_patch(Rectangle((0.072, 0.684), 0.162, 0.026, facecolor="#DCE8F8", edgecolor="none", zorder=3))
+    for i_dot, col_d in enumerate(["#E07A5F", "#E9B44C", "#4A7EC7"]):
+        ax.add_patch(Circle((0.084 + i_dot * 0.010, 0.697), 0.0032, color=col_d, zorder=4))
+    xs_w = np.linspace(0.085, 0.222, 18)
+    ys_w = 0.635 + 0.018 * np.sin(np.linspace(0, 4.2 * np.pi, 18)) * np.array([0.4, 0.9, 1.0, 0.7, 0.5, 0.9, 1.1, 0.8, 0.4, 0.9, 1.0, 0.6, 0.8, 1.0, 0.5, 0.7, 0.9, 0.4])
+    ax.plot(xs_w, ys_w, color="#2554B8", lw=1.4, zorder=4)
+    for b_i, bh in enumerate([0.025, 0.036, 0.028, 0.042, 0.033]):
+        ax.add_patch(Rectangle((0.092 + b_i * 0.025, 0.558), 0.015, bh, facecolor="#7AA2DB", edgecolor="none", zorder=4))
+    ax.text(0.153, 0.495, "600观察户 · 41合成主体", ha="center", va="center", fontsize=9.3, color="#334155", zorder=4)
 
-    # Left Column - Bottom Card: Institutional Rules
-    _draw_box(ax, 0.028, 0.065, 0.249, 0.385, fc="#FFFFFF", ec=C_TEAL, lw=1.3, r=0.013, zorder=2)
-    _draw_box(ax, 0.036, 0.394, 0.233, 0.046, fc=C_TEAL, ec=C_TEAL, lw=0.8, r=0.008, zorder=3)
-    ax.text(0.1525, 0.417, "现实政策与资源边界约束", ha="center", va="center", fontsize=10.0, fontweight="bold", color="#FFFFFF", zorder=4)
-    left_bot_items = [
-        "1. 存量托底：耕地地力保护补贴\n   （连续抛荒 1 年以上次年停发）",
-        "2. 共同硬预算：年 15 万元当年清零\n   （规模门槛东中50 / 西30 / 东北100亩）",
-        "3. 双轨流转契约期限结构：\n   小农1年 / 农场合作社3年 / 企业4年",
-        "4. 货币可替代性与口粮购销价差：\n   春耕资金统一约束、自留优先于售粮",
-    ]
-    y_pos = 0.362
-    for txt in left_bot_items:
-        ax.text(0.038, y_pos, txt, ha="left", va="top", fontsize=8.3, color="#1E293B", linespacing=1.32, zorder=4)
-        y_pos -= 0.072
+    # Card 1B: Policy & Conservation Boundaries
+    _draw_box(ax, 0.045, 0.092, 0.216, 0.338, fc="#FFFFFF", ec="#4A7EC7", lw=1.4, r=0.016, zorder=2)
+    ax.text(0.153, 0.392, "制度守恒约束", ha="center", va="center", fontsize=10.8, fontweight="bold", color="#1E3A5F", zorder=4)
+    # Minimalist rule sliders + bilateral balance glyph
+    _draw_box(ax, 0.072, 0.175, 0.162, 0.165, fc="#F3F7FD", ec="#4A7EC7", lw=1.0, r=0.009, zorder=3)
+    for row_k, (ry, kx) in enumerate([(0.305, 0.175), (0.258, 0.132), (0.210, 0.190)]):
+        ax.plot([0.088, 0.216], [ry, ry], color="#9BB8E3", lw=2.0, solid_capstyle="round", zorder=4)
+        ax.add_patch(Circle((kx, ry), 0.0085, facecolor="#2554B8", edgecolor="#FFFFFF", lw=1.0, zorder=5))
+    ax.text(0.153, 0.128, "清零预算 · 双轨 · 实物守恒", ha="center", va="center", fontsize=9.3, color="#334155", zorder=4)
 
-    # Center Column - Top Card: Government Upper Layer
-    _draw_box(ax, 0.324, 0.625, 0.366, 0.21, fc=C_NAVY, ec="#153560", lw=1.5, r=0.014, zorder=2)
-    ax.text(0.507, 0.804, "上层：中央财政动态调控主体（跨期寻优与基准对照）", ha="center", va="center", fontsize=9.8, fontweight="bold", color="#FFFFFF", zorder=3)
-    _draw_box(ax, 0.338, 0.720, 0.338, 0.058, fc="#2B62A8", ec="#6FA3E0", lw=1.0, r=0.009, zorder=3)
-    ax.text(0.507, 0.749, "仅观测上年度 4 区滞后公共指标\n（粮食耕种率、闲置率、流转率、资金紧缺户比例）", ha="center", va="center", fontsize=8.3, color="#FFFFFF", linespacing=1.28, zorder=4)
-    _draw_box(ax, 0.338, 0.640, 0.338, 0.068, fc="#FFFFFF", ec="#8BB4E3", lw=1.0, r=0.009, zorder=3)
-    ax.text(0.507, 0.674, "6类策略同场公平对比（30项共享预算方案）：\n基准无增补 | 统一固定 | 区域固定 | 透明规则 | 单期短视 | 跨期寻优", ha="center", va="center", fontsize=8.1, color="#14233C", linespacing=1.32, zorder=4)
+    # ---------------- Column 2: Two-Level Dynamic Governance Hub ----------------
+    # Left slim pill: Historical Calibration
+    _draw_box(ax, 0.316, 0.275, 0.066, 0.425, fc="#FFFFFF", ec="#94A3B8", lw=1.2, r=0.015, zorder=2)
+    ax.text(0.349, 0.658, "历史校准", ha="center", va="center", fontsize=10.2, fontweight="bold", color="#1E293B", zorder=4)
+    # Minimalist multi-track timeline branch graphic
+    ax.plot([0.346, 0.346], [0.315, 0.605], color="#334155", lw=1.6, zorder=3)
+    ax.plot([0.346, 0.363, 0.363], [0.405, 0.445, 0.535], color="#109488", lw=1.4, zorder=3)
+    ax.plot([0.346, 0.331, 0.331], [0.465, 0.505, 0.575], color="#2554B8", lw=1.4, zorder=3)
+    for dx, dy, dc in [(0.346, 0.320, "#109488"), (0.346, 0.405, "#2554B8"), (0.363, 0.535, "#109488"), (0.331, 0.575, "#2554B8"), (0.346, 0.605, "#334155")]:
+        ax.add_patch(Circle((dx, dy), 0.0065, facecolor=dc, edgecolor="#FFFFFF", lw=0.8, zorder=4))
 
-    # Center Column - Bottom Card: Inner ABM Environment
-    _draw_box(ax, 0.324, 0.065, 0.366, 0.475, fc=C_CARD_TEAL, ec=C_TEAL, lw=1.5, r=0.014, zorder=2)
-    ax.text(0.507, 0.514, "下层：四区异质主体交互与双市场均衡仿真环境", ha="center", va="center", fontsize=10.2, fontweight="bold", color="#0F5243", zorder=3)
+    # Central Prominent Cobalt Pillar: Upper-Level Government RL
+    _draw_box(ax, 0.412, 0.205, 0.176, 0.580, fc="#2354C4", ec="#1A3D94", lw=1.6, r=0.018, zorder=2)
+    ax.text(0.500, 0.742, "政府动态调控", ha="center", va="center", fontsize=11.5, fontweight="bold", color="#FFFFFF", zorder=4)
+    # Hierarchical decision tree icon in crisp white/light blue
+    ax.add_patch(Circle((0.500, 0.678), 0.011, facecolor="#9AC0FF", edgecolor="#FFFFFF", lw=1.2, zorder=4))
+    for cx_b in (0.455, 0.500, 0.545):
+        ax.plot([0.500, cx_b], [0.667, 0.618], color="#BFD8FF", lw=1.2, zorder=3)
+        ax.add_patch(Circle((cx_b, 0.612), 0.008, facecolor="#9AC0FF", edgecolor="#FFFFFF", lw=1.0, zorder=4))
+    for bx in (0.438, 0.472, 0.528, 0.562):
+        ax.plot([0.455 if bx < 0.49 else 0.545, bx], [0.604, 0.558], color="#89B4FA", lw=1.0, zorder=3)
+        ax.add_patch(Circle((bx, 0.554), 0.0055, facecolor="#FFFFFF", edgecolor="none", zorder=4))
+    # 3 crisp frosted inner pills
+    for py, ptxt in [(0.458, "滞后观测"), (0.362, "分区匹配"), (0.266, "跨期学习")]:
+        _draw_box(ax, 0.434, py, 0.132, 0.062, fc="#1D45A5", ec="#93C5FD", lw=1.0, r=0.012, zorder=3)
+        ax.text(0.500, py + 0.031, ptxt, ha="center", va="center", fontsize=10.0, fontweight="bold", color="#FFFFFF", zorder=4)
 
-    # Sub-block A: Heterogeneous Actors
-    _draw_box(ax, 0.338, 0.398, 0.338, 0.092, fc="#FFFFFF", ec=C_TEAL, lw=1.1, r=0.010, zorder=3)
-    ax.text(0.507, 0.467, "异质农业经营主体同口径决策规划", ha="center", va="center", fontsize=9.2, fontweight="bold", color="#0F5243", zorder=4)
-    ax.text(0.507, 0.427, "600户调查小农（老龄与务工退出惯性） | 23户家庭农场\n15个农民合作社（农机连片降本） | 3家农业企业（资本底线退出）", ha="center", va="center", fontsize=8.0, color="#1E293B", linespacing=1.32, zorder=4)
+    # Right slim pill: Bilateral Conservation Audit
+    _draw_box(ax, 0.618, 0.275, 0.066, 0.425, fc="#FFFFFF", ec="#94A3B8", lw=1.2, r=0.015, zorder=2)
+    ax.text(0.651, 0.658, "守恒核验", ha="center", va="center", fontsize=10.2, fontweight="bold", color="#1E293B", zorder=4)
+    # Crisp cobalt shield badge
+    shield = Polygon(
+        [(0.651, 0.608), (0.670, 0.596), (0.667, 0.548), (0.651, 0.528), (0.635, 0.548), (0.632, 0.596)],
+        closed=True, facecolor="#2354C4", edgecolor="#1A3D94", lw=1.1, zorder=4,
+    )
+    ax.add_patch(shield)
+    ax.plot([0.643, 0.650, 0.660], [0.569, 0.558, 0.581], color="#FFFFFF", lw=1.8, zorder=5)
+    # Mini assertion diamonds underneath
+    ax.plot([0.651, 0.651], [0.330, 0.492], color="#334155", lw=1.2, zorder=3)
+    ax.add_patch(Polygon([(0.651, 0.490), (0.664, 0.464), (0.651, 0.438), (0.638, 0.464)], closed=True, facecolor="#4A90E2", edgecolor="#334155", lw=0.9, zorder=4))
+    ax.add_patch(Circle((0.651, 0.390), 0.0085, facecolor="#E9B44C", edgecolor="#334155", lw=0.9, zorder=4))
+    ax.add_patch(Circle((0.651, 0.330), 0.0085, facecolor="#109488", edgecolor="#334155", lw=0.9, zorder=4))
 
-    # Sub-block B: Two Markets Side-by-Side
-    _draw_box(ax, 0.338, 0.215, 0.163, 0.162, fc="#FFFFFF", ec=C_BLUE, lw=1.1, r=0.010, zorder=3)
-    ax.text(0.4195, 0.354, "省内耕地流转市场", ha="center", va="center", fontsize=9.0, fontweight="bold", color=C_NAVY, zorder=4)
-    ax.text(0.4195, 0.280, "· 自耕保留与挂牌转出\n· 序贯增量影子价竞租\n· 村社连片归集（可选）\n· 履约违约与流拍复耕", ha="center", va="center", fontsize=8.0, color="#1E293B", linespacing=1.36, zorder=4)
+    # ---------------- Column 3: Simulation Environment & Mechanism Output ----------------
+    # Top Teal Block: Four-Region Agri-ABM
+    _draw_box(ax, 0.738, 0.425, 0.218, 0.365, fc="#10A39A", ec="#0B7D76", lw=1.5, r=0.018, zorder=2)
+    ax.text(0.847, 0.752, "四区农业多主体系统", ha="center", va="center", fontsize=11.0, fontweight="bold", color="#FFFFFF", zorder=4)
+    _draw_box(ax, 0.758, 0.635, 0.178, 0.068, fc="#AEEAE4", ec="#7CDCD3", lw=1.0, r=0.012, zorder=3)
+    ax.text(0.847, 0.669, "主体最优决策", ha="center", va="center", fontsize=10.2, fontweight="bold", color="#0B433F", zorder=4)
+    _draw_box(ax, 0.758, 0.548, 0.178, 0.068, fc="#AEEAE4", ec="#7CDCD3", lw=1.0, r=0.012, zorder=3)
+    ax.text(0.847, 0.582, "竞租粮贸出清", ha="center", va="center", fontsize=10.2, fontweight="bold", color="#0B433F", zorder=4)
+    # Minimalist stacked plots geometric emblem
+    for layer_y, fc_l in [(0.452, "#73DDD3"), (0.470, "#97EAE2"), (0.488, "#C6F6F1")]:
+        poly = Polygon(
+            [(0.785, layer_y), (0.818, layer_y - 0.014), (0.851, layer_y), (0.818, layer_y + 0.014)],
+            closed=True, facecolor=fc_l, edgecolor="#0B7D76", lw=0.8, zorder=4,
+        )
+        ax.add_patch(poly)
+    for cx_s, r_s in [(0.885, 0.016), (0.904, 0.020), (0.922, 0.014)]:
+        ax.add_patch(Circle((cx_s, 0.474), r_s, facecolor="#E6FAF8", edgecolor="#0B7D76", lw=0.9, zorder=4))
 
-    _draw_box(ax, 0.513, 0.215, 0.163, 0.162, fc="#FFFFFF", ec=C_AMBER, lw=1.1, r=0.010, zorder=3)
-    ax.text(0.5945, 0.354, "生产与省际购销模块", ha="center", va="center", fontsize=9.0, fontweight="bold", color="#9C5610", zorder=4)
-    ax.text(0.5945, 0.280, "· 凹二次规划粮经配置\n· 托管扣减农机作业费\n· 订单价外奖与省际套利\n  （浙闽苏粤与赣皖湘豫）", ha="center", va="center", fontsize=8.0, color="#1E293B", linespacing=1.36, zorder=4)
+    # Bottom Teal-Outlined Output Card
+    _draw_box(ax, 0.738, 0.155, 0.218, 0.205, fc="#EBF9F7", ec="#10A39A", lw=1.4, r=0.018, zorder=2)
+    ax.text(0.847, 0.328, "传导诊断输出", ha="center", va="center", fontsize=10.8, fontweight="bold", color="#0B433F", zorder=4)
+    # Mini white analytics inset
+    _draw_box(ax, 0.758, 0.192, 0.084, 0.100, fc="#FFFFFF", ec="#B8E5E0", lw=1.0, r=0.008, zorder=3)
+    for bi, (bh, bc) in enumerate([(0.030, "#2354C4"), (0.052, "#10A39A"), (0.042, "#D9822B"), (0.068, "#2354C4")]):
+        ax.add_patch(Rectangle((0.768 + bi * 0.017, 0.205), 0.011, bh, facecolor=bc, edgecolor="none", zorder=4))
+    _draw_box(ax, 0.854, 0.192, 0.084, 0.100, fc="#FFFFFF", ec="#B8E5E0", lw=1.0, r=0.008, zorder=3)
+    ax.text(0.896, 0.262, "地租分解", ha="center", va="center", fontsize=8.8, fontweight="bold", color="#1E293B", zorder=4)
+    ax.text(0.896, 0.238, "套利封顶", ha="center", va="center", fontsize=8.8, fontweight="bold", color="#1E293B", zorder=4)
+    ax.text(0.896, 0.214, "产能留存", ha="center", va="center", fontsize=8.8, fontweight="bold", color="#1E293B", zorder=4)
 
-    # Sub-block C: Weather & Settlement
-    _draw_box(ax, 0.338, 0.085, 0.338, 0.108, fc="#FFFFFF", ec=C_SLATE, lw=1.1, r=0.010, zorder=3)
-    ax.text(0.507, 0.166, "年度收获结算与跨期状态更新", ha="center", va="center", fontsize=9.2, fontweight="bold", color="#1E293B", zorder=4)
-    ax.text(0.507, 0.119, "区域气象冲击实现 → 先留口粮后售余粮 → 实支核定与\n双边商品余粮扣减 → 更新下期资金、储蓄与剩余租期", ha="center", va="center", fontsize=8.0, color="#334155", linespacing=1.32, zorder=4)
+    # ---------------- Clean Orthogonal Connectors ----------------
+    # Left 1A & 1B merge neatly on vertical bus at x=0.289 -> enter Center Left Card cleanly
+    ax.plot([0.263, 0.289, 0.289, 0.263], [0.625, 0.625, 0.260, 0.260], color="#3A68C2", lw=2.0, zorder=4)
+    _draw_arrow(ax, 0.289, 0.488, 0.314, 0.488, color="#3A68C2", lw=2.1, zorder=5)
+    # Inside Center Col clean links
+    _draw_arrow(ax, 0.384, 0.488, 0.410, 0.488, color="#3A68C2", lw=1.8, both=True)
+    _draw_arrow(ax, 0.590, 0.488, 0.616, 0.488, color="#3A68C2", lw=1.8, both=True)
+    # Center Tower -> Right Top (clean straight horizontal channel ABOVE Audit Card!)
+    _draw_arrow(ax, 0.590, 0.735, 0.736, 0.735, color="#108A81", lw=2.2, both=False)
+    ax.text(0.663, 0.760, "补贴配比", ha="center", va="center", fontsize=9.2, fontweight="bold", color="#0F6B64", zorder=5)
+    # Audit Shield <-> Right Top
+    _draw_arrow(ax, 0.686, 0.560, 0.736, 0.560, color="#108A81", lw=1.9, both=True)
+    # Right Top -> Right Bottom
+    _draw_arrow(ax, 0.847, 0.422, 0.847, 0.362, color="#108A81", lw=2.1)
+    # Clean single U-shaped Feedback Return Arrow (Warm Ochre along clean bottom track y=0.108)
+    ax.plot([0.847, 0.847, 0.500], [0.153, 0.108, 0.108], color="#C2882B", lw=2.2, zorder=4)
+    _draw_arrow(ax, 0.500, 0.108, 0.500, 0.203, color="#C2882B", lw=2.2, zorder=5)
+    _draw_box(ax, 0.630, 0.088, 0.082, 0.036, fc="#F4F6F8", ec="none", lw=0.0, r=0.008, zorder=4)
+    ax.text(0.671, 0.106, "滞后回报", ha="center", va="center", fontsize=9.2, fontweight="bold", color="#9C6A19", zorder=5)
 
-    # Arrows inside Center Column (Closed Loop)
-    _draw_arrow(ax, 0.440, 0.625, 0.440, 0.542, color=C_NAVY, lw=2.0)
-    ax.text(0.431, 0.584, "下达分区分工具\n补贴限额", ha="right", va="center", fontsize=8.3, fontweight="bold", color=C_NAVY)
-    _draw_arrow(ax, 0.574, 0.542, 0.574, 0.625, color=C_TEAL, lw=2.0)
-    ax.text(0.583, 0.584, "回传滞后公共指标\n与奖励回报", ha="left", va="center", fontsize=8.3, fontweight="bold", color=C_TEAL)
-
-    # Arrows Left -> Center
-    _draw_arrow(ax, 0.278, 0.66, 0.323, 0.72, color=C_BLUE, lw=1.8)
-    _draw_arrow(ax, 0.278, 0.28, 0.323, 0.28, color=C_TEAL, lw=1.8)
-
-    # Right Column - Top Card: Verification & Conservation Gate
-    _draw_box(ax, 0.736, 0.465, 0.237, 0.370, fc="#FFFFFF", ec=C_TEAL, lw=1.3, r=0.013, zorder=2)
-    _draw_box(ax, 0.744, 0.779, 0.221, 0.046, fc=C_TEAL, ec=C_TEAL, lw=0.8, r=0.008, zorder=3)
-    ax.text(0.8545, 0.802, "经验核验与守恒审计门禁", ha="center", va="center", fontsize=10.0, fontweight="bold", color="#FFFFFF", zorder=4)
-    right_top_items = [
-        "1. 历史同户独立核验：\n   2011—2015年一步与五年递推\n   （严格不用2011+数据反调参）",
-        "2. 双边复式与实物守恒断言：\n   6类地块、租收支与财政闭合；\n   跨省买粮 ≡ 产区余粮扣减量",
-        "3. 样本外留出评价隔离：\n   12开发 / 32训练 / 48独立评价",
-    ]
-    y_pos = 0.744
-    for txt in right_top_items:
-        ax.text(0.747, y_pos, txt, ha="left", va="top", fontsize=8.2, color="#1E293B", linespacing=1.32, zorder=4)
-        y_pos -= 0.092
-
-    # Right Column - Bottom Card: Mechanism & Policy Outputs
-    _draw_box(ax, 0.736, 0.065, 0.237, 0.375, fc="#FFFFFF", ec=C_NAVY, lw=1.3, r=0.013, zorder=2)
-    _draw_box(ax, 0.744, 0.384, 0.221, 0.046, fc=C_NAVY, ec=C_NAVY, lw=0.8, r=0.008, zorder=3)
-    ax.text(0.8545, 0.407, "机制分解与政策效应输出", ha="center", va="center", fontsize=10.0, fontweight="bold", color="#FFFFFF", zorder=4)
-    right_bot_items = [
-        "1. 流动性效应与土地重配剥离\n   （固定基准租约快照对照）",
-        "2. 地租“价格—面积”对称分解\n   与同地块交集纯单价差",
-        "3. 跨省订单套利规模与封顶效应\n   （宽松额度与实种上限对照）",
-        "4. 六类策略四维并列公平评估\n   （产粮、实支、效率与停补留存）",
-    ]
-    y_pos = 0.354
-    for txt in right_bot_items:
-        ax.text(0.747, y_pos, txt, ha="left", va="top", fontsize=8.2, color="#1E293B", linespacing=1.32, zorder=4)
-        y_pos -= 0.072
-
-    # Arrows Center -> Right
-    _draw_arrow(ax, 0.691, 0.66, 0.735, 0.66, color=C_TEAL, lw=1.8)
-    _draw_arrow(ax, 0.691, 0.25, 0.735, 0.25, color=C_NAVY, lw=1.8)
-
-    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.12)
+    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.10)
     plt.close(fig)
 
 
@@ -438,97 +462,138 @@ def plot_fig4_village_and_arbitrage(out_path: Path) -> None:
 
 
 def plot_fig5_government_6way(out_path: Path) -> None:
-    df5 = pd.read_csv(RES_DIR / "exp5_government_6way_v2_2_summary.csv")
-    df_yr = pd.read_csv(RES_DIR / "exp5_government_6way_v2_2_yearly.csv")
+    df5a = pd.read_csv(RES_DIR / "exp5_government_6way_v2_2_summary.csv")
+    df5b = pd.read_csv(RES_DIR / "exp5b_intertemporal_6way_summary.csv")
+    df_yr = pd.read_csv(RES_DIR / "exp5b_intertemporal_yearly.csv")
 
-    pol_order = ["uniform_fixed", "regional_fixed", "transparent_rule", "myopic", "gov_rl"]
-    pol_labels = {
-        "uniform_fixed": "全国统一固定",
-        "regional_fixed": "区域差异固定",
-        "transparent_rule": "透明动态规则",
-        "myopic": "单期短视寻优",
-        "gov_rl": "跨期强化学习",
-    }
-    colors = {
-        "uniform_fixed": "#64748B",
-        "regional_fixed": C_BLUE,
-        "transparent_rule": C_AMBER,
-        "myopic": C_TEAL,
-        "gov_rl": C_NAVY,
-    }
-
-    sub = df5.set_index("policy_label").loc[pol_order]
-    fig, axes = plt.subplots(2, 2, figsize=(13.6, 8.6))
+    fig, axes = plt.subplots(2, 2, figsize=(14.6, 9.2))
     fig.patch.set_facecolor("#FFFFFF")
-    x = np.arange(len(pol_order))
 
-    # (a) 8-year cumulative grain gain vs baseline + yearly gain path (clean inset or 2x2 metrics)
+    # (a) Base Scenario (Exp 5A: annual-only 30 actions) 8-yr gain
     ax = axes[0, 0]
-    g_m = sub["grain_gain_vs_p0_tons"].to_numpy()
-    glo, ghi = zip(*[_parse_ci(s) for s in sub["grain_gain_ci95"]])
-    gyerr = np.vstack([g_m - np.asarray(glo), np.asarray(ghi) - g_m])
-    bars_a = ax.bar(x, g_m, width=0.52, color=[colors[k] for k in pol_order], yerr=gyerr, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
-    for idx_b, (b, mv) in enumerate(zip(bars_a, g_m)):
-        ax.text(b.get_x() + b.get_width() / 2, mv + gyerr[1][idx_b] + 8, f"+{_r1(float(mv))} t", ha="center", va="bottom", fontsize=8.8, fontweight="bold")
-    ax.set_xticks(x)
-    ax.set_xticklabels([pol_labels[k] for k in pol_order], fontsize=9.2)
-    ax.set_ylabel("较存量基准增产 / t", fontsize=9.8)
-    ax.set_title("(a) 八年累计粮食增产量（48 个独立留出种子均值与 95% 置信区间）", fontsize=10.3, fontweight="bold", pad=8)
-    ax.set_ylim(0, max(g_m) * 1.22)
+    order_a = ["uniform_fixed", "transparent_rule", "regional_fixed", "myopic", "gov_rl"]
+    lbl_a = {
+        "uniform_fixed": "全国统一\n固定",
+        "transparent_rule": "透明动态\n阈值规则",
+        "regional_fixed": "事后区域\n最优对照",
+        "myopic": "单期短视\n寻优",
+        "gov_rl": "跨期强化\n学习",
+    }
+    col_a = ["#64748B", C_AMBER, C_BLUE, C_TEAL, C_NAVY]
+    sub_a = df5a.set_index("policy_label").loc[order_a]
+    ga = sub_a["grain_gain_vs_p0_tons"].to_numpy()
+    galo, gahi = zip(*[_parse_ci(s) for s in sub_a["grain_gain_ci95"]])
+    ga_err = np.vstack([ga - np.asarray(galo), np.asarray(gahi) - ga])
+    xa = np.arange(len(order_a))
+    bars_a = ax.bar(xa, ga, width=0.52, color=col_a, yerr=ga_err, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
+    for idx_b, (b, mv) in enumerate(zip(bars_a, ga)):
+        ax.text(b.get_x() + b.get_width() / 2, mv + ga_err[1][idx_b] + 10, f"+{_r1(float(mv))} t", ha="center", va="bottom", fontsize=8.6, fontweight="bold")
+    ax.set_xticks(xa)
+    ax.set_xticklabels([lbl_a[k] for k in order_a], fontsize=8.8)
+    ax.set_ylabel("八年累计增粮 / t", fontsize=9.8)
+    ax.set_title("(a) 基础情景（仅年度清零补贴，30 方案）：八年累计增产", fontsize=10.3, fontweight="bold", pad=8)
+    ax.set_ylim(0, 680)
     ax.grid(axis="y", ls=":", alpha=0.5)
 
-    # (b) 8-year actual fiscal spending (wan yuan)
+    # (b) Extended Intertemporal Scenario (Exp 5B: 36 actions w/ paid 3-yr consolidation)
     ax = axes[0, 1]
-    sp_m = sub["spending_8yr_wan"].to_numpy()
-    slo, shi = zip(*[_parse_ci(s) for s in sub["spending_ci95"]])
-    syerr = np.vstack([sp_m - np.asarray(slo), np.asarray(shi) - sp_m])
-    bars_b = ax.bar(x, sp_m, width=0.52, color=[colors[k] for k in pol_order], yerr=syerr, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
-    for b, mv in zip(bars_b, sp_m):
-        ax.text(b.get_x() + b.get_width() / 2, mv - 12.0, f"{mv:.2f}\n万元", ha="center", va="center", fontsize=8.8, fontweight="bold", color="#FFFFFF")
-    ax.axhline(120.0, color=C_RED, ls="--", lw=1.4, label="八年累计共同预算上限（120.0 万元）")
-    ax.set_xticks(x)
-    ax.set_xticklabels([pol_labels[k] for k in pol_order], fontsize=9.2)
-    ax.set_ylabel("八年实际财政支出 / 万元", fontsize=9.8)
-    ax.set_title("(b) 八年累计实际财政支出（严格不突破 120 万元上限）", fontsize=10.5, fontweight="bold", pad=8)
-    ax.set_ylim(0, 142)
-    ax.legend(frameon=False, fontsize=8.8, loc="upper right")
+    order_b = ["uniform_fixed", "transparent_rule", "regional_fixed", "myopic_tree", "gov_rl_ridge", "gov_rl_tree"]
+    lbl_b = {
+        "uniform_fixed": "全国统一\n固定",
+        "transparent_rule": "透明动态\n阈值规则",
+        "regional_fixed": "事后最优\n(年付整治)",
+        "myopic_tree": "单期短视\n(树集成)",
+        "gov_rl_ridge": "跨期学习\n(线性近似)",
+        "gov_rl_tree": "跨期学习\n(树集成)",
+    }
+    col_b = ["#64748B", C_AMBER, C_BLUE, C_TEAL, "#4A7EC7", C_NAVY]
+    sub_b = df5b.set_index("policy_label").loc[order_b]
+    gb = sub_b["grain_gain_vs_p0_tons"].to_numpy()
+    gblo, gbhi = zip(*[_parse_ci(s) for s in sub_b["grain_gain_ci95"]])
+    gb_err = np.vstack([gb - np.asarray(gblo), np.asarray(gbhi) - gb])
+    xb = np.arange(len(order_b))
+    bars_b = ax.bar(xb, gb, width=0.54, color=col_b, yerr=gb_err, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
+    for idx_b, (b, mv) in enumerate(zip(bars_b, gb)):
+        ax.text(b.get_x() + b.get_width() / 2, mv + gb_err[1][idx_b] + 14, f"+{_r1(float(mv))} t", ha="center", va="bottom", fontsize=8.4, fontweight="bold")
+    ax.set_xticks(xb)
+    ax.set_xticklabels([lbl_b[k] for k in order_b], fontsize=8.5)
+    ax.set_ylabel("八年累计增粮 / t", fontsize=9.8)
+    ax.set_title("(b) 拓展情景（含有偿三年连片整治，36 方案）：八年累计增产", fontsize=10.3, fontweight="bold", pad=8)
+    ax.set_ylim(0, 1060)
     ax.grid(axis="y", ls=":", alpha=0.5)
 
-    # (c) Fiscal efficiency (kg grain per 100 yuan spent)
+    # (c) Annual Gain Trajectories in Exp 5B (Years 1-8) highlighting consolidation pulse rhythm
     ax = axes[1, 0]
-    ef_m = sub["kg_per_100yuan_spent"].to_numpy()
-    elo, ehi = zip(*[_parse_ci(s) for s in sub["kg_per_100yuan_ci95"]])
-    eyerr = np.vstack([ef_m - np.asarray(elo), np.asarray(ehi) - ef_m])
-    bars_c = ax.bar(x, ef_m, width=0.52, color=[colors[k] for k in pol_order], yerr=eyerr, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
-    for idx_b, (b, mv) in enumerate(zip(bars_c, ef_m)):
-        ax.text(b.get_x() + b.get_width() / 2, mv + eyerr[1][idx_b] + 0.9, f"{mv:.2f}", ha="center", va="bottom", fontsize=8.8, fontweight="bold")
-    ax.set_xticks(x)
-    ax.set_xticklabels([pol_labels[k] for k in pol_order], fontsize=9.2)
-    ax.set_ylabel("单位实支增粮效率 / (kg/百元)", fontsize=9.8)
-    ax.set_title("(c) 单位财政实支增粮效率（均以实际支出为分母）", fontsize=10.5, fontweight="bold", pad=8)
-    ax.set_ylim(0, max(ef_m) * 1.24)
+    df_main = df_yr[df_yr["window"] == "main"]
+    traj_specs = [
+        ("gov_rl_tree", "跨期强化学习（树集成，第2、5、8年脉冲整治）", C_NAVY, "-o", 2.3),
+        ("regional_fixed", "事后区域最优（每年固定支付整治费）", C_BLUE, "--s", 1.9),
+        ("uniform_fixed", "全国统一固定（封顶订单）", "#64748B", "-.^", 1.7),
+        ("transparent_rule", "透明动态阈值规则", C_AMBER, ":d", 1.7),
+    ]
+    for pkey, plbl, pcol, pfmt, plw in traj_specs:
+        sub_t = df_main[df_main["policy_label"] == pkey].sort_values("year")
+        ax.plot(sub_t["year"], sub_t["grain_gain_vs_p0_tons"], pfmt, color=pcol, lw=plw, ms=5.2, label=plbl)
+    # Mark Years 2, 5, 8 pulse trigger nodes cleanly on gov_rl_tree curve
+    rl_curve = df_main[df_main["policy_label"] == "gov_rl_tree"].set_index("year")
+    for p_yr in (2, 5, 8):
+        yv = float(rl_curve.loc[p_yr, "grain_gain_vs_p0_tons"])
+        ax.scatter([p_yr], [yv], s=95, facecolor="#FFFFFF", edgecolor=C_RED, linewidth=2.0, zorder=6)
+        ax.annotate(
+            f"第{p_yr}年脉冲",
+            (p_yr, yv),
+            textcoords="offset points",
+            xytext=(-6 if p_yr == 2 else 0, 12),
+            ha="center",
+            fontsize=8.2,
+            fontweight="bold",
+            color=C_RED,
+        )
+    ax.set_xticks(range(1, 9))
+    ax.set_xlabel("仿真运行年份 / 年", fontsize=9.8)
+    ax.set_ylabel("当年较基线粮食增产量 / t", fontsize=9.8)
+    ax.set_title("(c) 拓展情景逐年增粮轨迹与三年连片整治脉冲时序", fontsize=10.3, fontweight="bold", pad=8)
+    ax.set_ylim(15, 168)
+    ax.grid(axis="y", ls=":", alpha=0.5)
+    ax.legend(frameon=False, fontsize=8.3, loc="upper left")
+
+    # (d) Exp 5B Efficiency (kg/100yuan) + Year 7-8 Withdrawal Retention (t)
+    ax = axes[1, 1]
+    ef_m = sub_b["kg_per_100yuan_spent"].to_numpy()
+    elo, ehi = zip(*[_parse_ci(s) for s in sub_b["kg_per_100yuan_ci95"]])
+    e_err = np.vstack([ef_m - np.asarray(elo), np.asarray(ehi) - ef_m])
+    wd_m = sub_b["withdrawal_yr7_8_gain_tons"].to_numpy()
+
+    bars_d = ax.bar(xb, ef_m, width=0.48, color=col_b, yerr=e_err, capsize=4, alpha=0.88, error_kw={"lw": 1.2, "ecolor": "#111827"}, label="单位实支增粮效率（kg/百元，左轴）")
+    for idx_b, (b, mv) in enumerate(zip(bars_d, ef_m)):
+        ax.text(b.get_x() + b.get_width() / 2, mv * 0.45, f"{mv:.1f}", ha="center", va="center", fontsize=8.4, fontweight="bold", color="#FFFFFF")
+    ax.set_xticks(xb)
+    ax.set_xticklabels([lbl_b[k] for k in order_b], fontsize=8.5)
+    ax.set_ylabel("单位实支增粮效率 / (kg/百元)", fontsize=9.8, color=C_NAVY)
+    ax.set_ylim(0, 108)
     ax.grid(axis="y", ls=":", alpha=0.5)
 
-    # (d) Year 7-8 withdrawal retention + yearly gain trajectories
-    ax = axes[1, 1]
-    wd_m = sub["withdrawal_yr7_8_gain_tons"].to_numpy()
-    wlo, whi = zip(*[_parse_ci(s) for s in sub["withdrawal_gain_ci95"]])
-    wyerr = np.vstack([wd_m - np.asarray(wlo), np.asarray(whi) - wd_m])
-    bars_d = ax.bar(x, wd_m, width=0.52, color=[colors[k] for k in pol_order], yerr=wyerr, capsize=4, error_kw={"lw": 1.2, "ecolor": "#111827"})
-    for idx_b, (b, mv) in enumerate(zip(bars_d, wd_m)):
-        ax.text(b.get_x() + b.get_width() / 2, mv + wyerr[1][idx_b] + 1.8, f"+{mv:.1f} t", ha="center", va="bottom", fontsize=8.8, fontweight="bold")
-    ax.set_xticks(x)
-    ax.set_xticklabels([pol_labels[k] for k in pol_order], fontsize=9.2)
-    ax.set_ylabel("第 7—8 年停补留存增量 / t", fontsize=9.8)
-    ax.set_title("(d) 第 6 年末全面停补后第 7—8 年粮食产能留存", fontsize=10.5, fontweight="bold", pad=8)
-    ax.set_ylim(0, max(max(wd_m) * 1.28, 30.0))
-    ax.grid(axis="y", ls=":", alpha=0.5)
+    ax2 = ax.twinx()
+    ax2.plot(xb, wd_m, "D--", color=C_RED, lw=2.0, ms=6.0, label="第 7—8 年停补留存增量（t，右轴）", zorder=6)
+    for xk, wv in zip(xb, wd_m):
+        y_off = -16 if xk == 1 else (12 if xk == 0 else 9)
+        ax2.annotate(f"+{_r1(float(wv))} t", (xk, wv), textcoords="offset points", xytext=(0, y_off), ha="center", fontsize=8.2, fontweight="bold", color=C_RED)
+    ax2.set_ylabel("停补后第 7—8 年留存增量 / t", fontsize=9.5, color=C_RED)
+    ax2.set_ylim(0, 245)
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_color(C_RED)
+    ax.set_title("(d) 拓展情景财政增粮效率与第 6 年末停补后产能留存", fontsize=10.3, fontweight="bold", pad=8)
+
+    h1, l1 = ax.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax.legend(h1 + h2, l1 + l2, frameon=False, fontsize=8.2, loc="upper left")
 
     for ax_i in axes.flat:
         ax_i.spines["top"].set_visible(False)
-        ax_i.spines["right"].set_visible(False)
+        if ax_i is not axes[1, 1]:
+            ax_i.spines["right"].set_visible(False)
 
-    plt.tight_layout(h_pad=2.6, w_pad=2.2)
+    plt.tight_layout(h_pad=2.8, w_pad=2.4)
     fig.savefig(out_path, bbox_inches="tight", pad_inches=0.10)
     plt.close(fig)
 

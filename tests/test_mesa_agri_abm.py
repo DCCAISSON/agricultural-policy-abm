@@ -311,3 +311,47 @@ def test_interprovincial_order_arbitrage_conservation_and_verified_cap():
     assert arb_ver_kg < arb_loose_kg * 0.5
     assert leak_ver < leak_loose * 0.5
     assert east_grain_ver > east_grain_loose
+
+
+def test_paid_village_campaign_fiscal_conservation_and_cycle():
+    from mesa_agri_abm import fit_v2_government_mlp_fqi, intertemporal_v2_2_design
+
+    d_exp = intertemporal_v2_2_design()
+    regs, _ = load_v2_calibrated_regions(PROJECT_ROOT, d_exp)
+    m = AgriSuccessionMesaModel(574001, regs, d_exp, policy_mode="fixed", fixed_action_idx=32)
+    assert len(m.menu) == 36
+    assert m.extract_public_state_features().shape == (28,)
+
+    # Year 1: pays 105k campaign fee + <=45k subsidies; activates 3-year cycle (remaining -> 2 at EOY)
+    j1, r1, _ = m.step(explicit_action_idx=32)
+    assert isclose(sum(r["village_coord_fee_yuan"] for r in r1), 105_000.0, abs_tol=1e-4)
+    assert j1["spending"] <= 150_000.0 + 1e-2
+    assert all(reg.village_pool_remaining_years == 2 for reg in m.regions)
+    assert isclose(m.extract_public_state_features()[2], 2.0 / 3.0, abs_tol=1e-6)
+
+    # Year 2: switches to Action 26 (no campaign fee, full 150k subsidy) while pool remains active!
+    j2, r2, _ = m.step(explicit_action_idx=26)
+    assert isclose(sum(r["village_coord_fee_yuan"] for r in r2), 0.0, abs_tol=1e-6)
+    assert j2["spending"] <= 150_000.0 + 1e-2
+    assert all(reg.village_pool_remaining_years == 1 for reg in m.regions)
+
+    # Short smoke check for Double-Q Tree-Based Batch FQI (incl. Year-1 constant, tree_ensemble 1D/2D & replay)
+    short_d = d_exp.with_overrides(main_years=4, withdrawal_after=3)
+    fitted = fit_v2_government_mlp_fqi([572001, 572002], regs, short_d, n_rollout_passes=1, max_workers=1)
+    assert fitted["n_actions"] == 36
+    assert fitted["tree_q_weights"][1]["kind"] == "constant"
+    assert fitted["tree_myopic_weights"][1]["kind"] == "constant"
+    assert fitted["tree_q_weights"][2]["kind"] == "tree_ensemble"
+
+    from mesa_agri_abm.model import _predict_q_values
+    import numpy as np
+    q_1d = _predict_q_values(fitted["tree_q_weights"][1], m.extract_public_state_features())
+    q_2d = _predict_q_values(fitted["tree_q_weights"][2], np.vstack([m.extract_public_state_features(), m.extract_public_state_features()]))
+    assert q_1d.shape == (36,) and q_2d.shape == (2, 36)
+
+    m_rl_a = AgriSuccessionMesaModel(574001, regs, short_d, policy_mode="gov_rl", learned_weights=fitted["tree_q_weights"])
+    m_rl_b = AgriSuccessionMesaModel(574001, regs, short_d, policy_mode="gov_rl", learned_weights=fitted["tree_q_weights"])
+    ja, _, _ = m_rl_a.step()
+    jb, _, _ = m_rl_b.step()
+    assert ja == jb
+    assert ja["spending"] <= 150_000.0 + 1e-2

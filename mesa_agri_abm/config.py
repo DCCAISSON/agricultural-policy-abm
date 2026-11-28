@@ -92,7 +92,7 @@ class V2Design:
     fqi_discount_gamma: float = 1.0
     gov_fiscal_cost_weight: float = 0.02
     gov_rent_cap_penalty_weight: float = 0.0
-    menu_mode: str = "v2_25"                       # "v2_25" (frozen V2) or "v2_2_clean" (clean V2.2 portfolio)
+    menu_mode: str = "v2_25"                       # "v2_25", "v2_2_clean", or "v2_2_intertemporal"
     dev_seeds: tuple[int, int] = (571001, 571012)
     train_seeds: tuple[int, int] = (572001, 572032)
     eval_seeds: tuple[int, int] = (574001, 574048)
@@ -117,6 +117,9 @@ class V2Design:
     village_grain_covenant_floor: float = 0.70     # 国办发〔2020〕44号 village-pooled anti-non-grain covenant
     order_cap_yuan_per_mu: float = 160.0           # Order-grain contract fiscal budget cap (150-240 CNY/mu ZJ/FJ norm)
     order_max_price_bonus_ratio: float = 0.13      # Post-harvest procurement price bonus (~0.35 CNY/kg in coast provinces)
+    enable_paid_village_campaigns: bool = False    # True in Exp 5B: government pays real coordination fee out of 150k cap
+    village_campaign_fee_yuan: float = 105_000.0   # Organization/consolidation service fee (~26.2 CNY/tradable mu, 农业农村部令2021年第1号第31条)
+    village_campaign_cycle_years: int = 3          # Matches 3-year FF/Coop contract cycle when triggered
 
     # 9. V2.2 Endogenous Interprovincial Order-Grain Arbitrage Verification Switch (default False)
     enable_interprovincial_arbitrage: bool = False
@@ -168,4 +171,16 @@ def clean_v2_2_design() -> V2Design:
         fqi_discount_gamma=0.96,
         gov_fiscal_cost_weight=0.02,
         gov_rent_cap_penalty_weight=0.0,
+    )
+
+
+def intertemporal_v2_2_design() -> V2Design:
+    """Exp 5B intertemporal V2.2 configuration: unlocks paid 3-year village consolidation campaigns,
+    expanded 28-dim lagged public state (year & multi-year lease share), and 36-action menu."""
+    return clean_v2_2_design().with_overrides(
+        id="NFPS600-Mesa-AgriABM-RL-v2.2-intertemporal",
+        menu_mode="v2_2_intertemporal",
+        enable_paid_village_campaigns=True,
+        village_campaign_fee_yuan=105_000.0,
+        village_campaign_cycle_years=3,
     )
